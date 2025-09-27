@@ -7,16 +7,35 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
+import { useQuery } from "@tanstack/react-query"
+import { Job, Worker, JobIssue } from "@/shared/schema"
 import SharedSidebar from "@/components/shared-sidebar"
 
 export default function JobsPage() {
   const [sidebarMinimized, setSidebarMinimized] = useState(false)
-
+   const fetchWithError = async (url: string) => {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
+    }
+    return response.json()
+  }
+  
+ const { data: jobs = [], isLoading: isJobsLoading } = useQuery<Job[]>({
+    queryKey: ['/api/jobs'],
+    queryFn: () => fetchWithError('/api/jobs'),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+  const activeJobs = jobs.filter(job => job.status === 'in_progress');
+  const SchJobs = jobs.filter(job => job.status === 'scheduled');
+  const completedJobs = jobs.filter(job => job.status === 'completed');
+  const archivedJobs = jobs.filter(job => job.status === 'archived');
+  
   const statusTabs = [
-    { label: "In progress", count: 2, active: true },
-    { label: "Scheduled", count: 0, active: false },
-    { label: "Completed", count: 0, active: false },
-    { label: "All", count: 2, active: false },
+    { label: "In progress", count: activeJobs.length, active: true },
+    { label: "Scheduled", count: SchJobs.length, active: false },
+    { label: "Completed", count: completedJobs.length, active: false },
+    { label: "All", count: jobs.length, active: false },
     { label: "Archived", count: 0, active: false },
   ]
 
@@ -79,7 +98,7 @@ export default function JobsPage() {
 
           {/* Job Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[1, 2].map((job) => (
+            {statusTabs..map((job) => (
               <Card key={job} className="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">

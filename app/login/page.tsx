@@ -18,10 +18,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const queryClient = useQueryClient();
-<<<<<<< HEAD
-  
-=======
->>>>>>> ec110c5d70cbc3ee3cf1526bddc0309ab8b6acc7
+
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -30,10 +27,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-<<<<<<< HEAD
-      console.log('Backend URL:', process.env.PI_URL);
-=======
->>>>>>> ec110c5d70cbc3ee3cf1526bddc0309ab8b6acc7
+
       const response = await fetch(`/api/auth/login`, {
         method: 'POST',
         headers: {

@@ -8,46 +8,119 @@ import { Badge } from "@/components/ui/badge"
 import SharedSidebar from "@/components/shared-sidebar"
 import { useQuery } from "@tanstack/react-query";
 import { Job, Worker, JobIssue } from "@/shared/schema";
+import { getQueryFn } from "@/./lib/utils";  
+import { format, startOfWeek, addDays, isPast } from "date-fns";
 
 
 export default function DashboardPage() {
-  const [sidebarMinimized, setSidebarMinimized] = useState(false)
+  interface CalendarEvent {
+  id: string;
+  title: string;
+  time: string;
+  date: Date;
+  color: string;
+}
 
+  const [sidebarMinimized, setSidebarMinimized] = useState(false)
+ const fetchWithError = async (url: string) => {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
+    }
+    return response.json()
+  }
   
+
+
  const { data: jobs = [], isLoading: isJobsLoading } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
+    queryFn: () => fetchWithError('/api/jobs'),
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
+    const { data: variations = [] } = useQuery<any[]>({
+    queryKey: ['/api/variations'],
+    queryFn: () => fetchWithError('/api/variations'),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+  // Fetch workers data
+  const { data: workers = [], isLoading: isWorkersLoading } = useQuery<Worker[]>({
+    queryKey: ['/api/workers'],
+    queryFn: () => fetchWithError('/api/workers'),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  // Fetch time entries data
+  const { data: timeEntries = [], isLoading: isTimeEntriesLoading } = useQuery<any[]>({
+    queryKey: ['/api/time-entries'],
+    queryFn: () => fetchWithError('/api/time-entries'),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+
+
+
   const activeJobs = jobs.filter(job => job.status === 'in_progress');
+    const completedToday = jobs.filter(job => {
+    const completedDate = new Date(job.completedTime || '');
+    const today = new Date();
+    return job.status === 'completed' &&
+           completedDate.getDate() === today.getDate() &&
+           completedDate.getMonth() === today.getMonth() &&
+           completedDate.getFullYear() === today.getFullYear();
+  });
+  const todayJobs = jobs.filter(job => job.status === 'in_progress');
+  const activeTeamIds = new Set(
+    todayJobs
+      .filter(job => job.status === 'in_progress')
+      .map(job => job.teamId)
+  );
+  const teamsActive = activeTeamIds.size;
 
   const metrics = [
     { label: "Active Jobs", value: jobs.length },
-    { label: "Completed Today", value: "0" },
-    { label: "Teams Active", value: "1" },
-    { label: "Variations", value: "0" },
+    { label: "Completed Today", value: completedToday.length },
+    { label: "Teams Active", value: teamsActive },
+    { label: "Variations", value: variations.length },
   ]
 
-  
-  const calendarItems = Array(7)
-    .fill(null)
-    .map((_, i) => ({
-      date: "15 Sep, Mon",
-      pending: "1 Pending",
-      location: "Location",
-      jobTask: "Job/Task",
-      overdue: true,
-    }))
+const getCalendarItems = () => {
+    const today = new Date()
+    const calendarItems = []
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today)
+      date.setDate(today.getDate() + i)
+      
+      const dayJobs = jobs.filter(job => {
+        const jobDate = new Date(job.startTime)
+        return jobDate.toDateString() === date.toDateString()
+      })
+      
+      const pendingCount = dayJobs.filter(job => 
+        job.status === 'scheduled' || job.status === 'in_progress'
+      ).length
+      
+      const hasOverdue = dayJobs.some(job => 
+        isPast(new Date(job.endTime)) && job.status !== 'completed'
+      )
+      
+      const firstJob = dayJobs[0]
+      
+      calendarItems.push({
+        date: format(date, 'dd MMM, EEE'),
+        pending: pendingCount > 0 ? `${pendingCount} Pending` : 'No jobs',
+        location: firstJob?.address?.split(',')[0] || 'No location',
+        jobTask: firstJob?.jobType || 'No jobs',
+        overdue: hasOverdue,
+        jobCount: dayJobs.length
+      })
+    }
+    
+    return calendarItems
+  }
 
-  const availabilityItems = [
-    { name: "Name", role: "Worker", status: "Available" },
-    { name: "Name", role: "Worker", status: "Available" },
-    { name: "Name", role: "Worker", status: "Available" },
-  ]
+  const calendarItems = getCalendarItems()
 
-  const recentActivity = [
-    { user: "Jeff", action: "checked in at 24a Grampian Rd, St Helier", date: "Sep 14, 2025" },
-    { user: "Sid", action: "checked in at 24a Grampian Rd, St Helier", date: "Sep 14, 2025" },
-    { user: "User", action: "checked in at 24a Grampian Rd, St Helier", date: "Sep 14, 2025" },
-  ]
 
   return (
     <div className="flex h-screen bg-[#eff0f6]">
@@ -99,7 +172,7 @@ export default function DashboardPage() {
                 <Card key={index} className="bg-white border border-gray-200 rounded-lg shadow-sm">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-semibold text-gray-900">{job.title}</h4>
+                      <h4 className="font-semibold text-gray-900">{job.jobType}</h4>
                       <Badge className="bg-[#fff0ea] text-[#ff622a] border-[#ffd4c5] hover:bg-[#fff0ea]">
                         {job.status}
                       </Badge>
@@ -107,15 +180,15 @@ export default function DashboardPage() {
                     <div className="space-y-3 text-sm text-gray-600">
                       <div className="flex items-center gap-3">
                         <MapPin className="w-4 h-4 text-[#ff622a]" />
-                        <span>{job.location}</span>
+                        <span>{job.address}</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <Users className="w-4 h-4" />
-                        <span>{job.assignee}</span>
+                        <span>{job.assignedTo}</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <Calendar className="w-4 h-4" />
-                        <span>{job.dates}</span>
+                        <span>{new Date(job.endTime).toLocaleDateString()}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -168,7 +241,7 @@ export default function DashboardPage() {
                 </Button>
               </div>
               <div className="space-y-4">
-                {availabilityItems.map((person, index) => (
+                {workers.map((person, index) => (
                   <div key={index} className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-[#fff0ea] rounded-full flex items-center justify-center">
                       <span className="text-[#ff622a] font-semibold">N</span>
@@ -189,7 +262,7 @@ export default function DashboardPage() {
             <div>
               <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Activity</h3>
               <div className="space-y-4">
-                {recentActivity.map((activity, index) => (
+                {timeEntries.map((activity, index) => (
                   <div key={index} className="flex items-center gap-4">
                     <div className="w-6 h-6 text-[#ff622a]">
                       <svg viewBox="0 0 24 24" fill="currentColor">
@@ -197,8 +270,8 @@ export default function DashboardPage() {
                       </svg>
                     </div>
                     <div className="flex-1">
-                      <span className="font-medium text-gray-900">{activity.user}</span>
-                      <span className="text-gray-600"> {activity.action}</span>
+                      <span className="font-medium text-gray-900">{activity.workerName}</span>
+                      <span className="text-gray-600"> Checked in at  {activity.jobName}</span>
                     </div>
                     <Badge className="bg-[#192d47] text-white text-xs px-2 py-1">{activity.date}</Badge>
                   </div>
