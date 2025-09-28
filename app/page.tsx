@@ -21,7 +21,12 @@ export default function DashboardPage() {
   color: string;
 }
 
-  const [sidebarMinimized, setSidebarMinimized] = useState(false)
+  const [sidebarMinimized, setSidebarMinimized] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try { return localStorage.getItem('sidebarMinimized') === 'true' } catch { return false }
+    }
+    return false
+  })
  const fetchWithError = async (url: string) => {
     const response = await fetch(url)
     if (!response.ok) {

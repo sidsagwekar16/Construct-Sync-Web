@@ -4,13 +4,31 @@ import { useState } from "react"
 import { SharedSidebar } from "@/components/shared-sidebar"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, Phone, Mail, Users, DollarSign } from "lucide-react"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Worker } from "@/shared/schema"
 
 export default function WorkersPage() {
-  const [isMinimized, setIsMinimized] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try { return localStorage.getItem('sidebarMinimized') === 'true' } catch { return false }
+    }
+    return false
+  })
+  const queryClient = useQueryClient()
   const [selectedWorker, setSelectedWorker] = useState<any | null>(null)
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/workers/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workers'] })
+      setSelectedWorker(null)
+    }
+  })
 
   const fetchWithError = async (url: string) => {
     const response = await fetch(url)
@@ -221,6 +239,7 @@ export default function WorkersPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1 border-gray-200 text-gray-600 hover:bg-gray-50 bg-transparent"
+                    onClick={() => setSelectedWorker(worker)}
                   >
                     Edit
                   </Button>
@@ -266,8 +285,8 @@ export default function WorkersPage() {
                 <div className="mt-6 flex items-center justify-between">
                   <div className="text-sm text-gray-600">Team: {selectedWorker.teamId ? `Team ${selectedWorker.teamId}` : 'Unassigned'}</div>
                   <div className="flex gap-2">
-                    <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => { if (confirm('Delete this worker?')) {/* wire up when endpoint ready */} }}>Delete</Button>
-                    <Button variant="outline">Edit</Button>
+                    <Button className="bg-red-600 hover:bg-red-700 text-white" disabled={deleteMutation.isPending} onClick={() => { if (confirm('Delete this worker?')) deleteMutation.mutate(selectedWorker.id) }}>{deleteMutation.isPending ? 'Deleting…' : 'Delete'}</Button>
+                    <Button variant="outline" onClick={() => alert('Edit flow coming soon')}>Edit</Button>
                   </div>
                 </div>
               </div>

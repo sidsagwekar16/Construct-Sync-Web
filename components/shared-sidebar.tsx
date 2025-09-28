@@ -33,6 +33,15 @@ const SharedSidebar = ({ onMinimizeChange }: SharedSidebarProps) => {
     const email = localStorage.getItem("userEmail") || "demo@constructsync.com"
     const name = localStorage.getItem("userName") || "Demo User"
     setUserInfo({ email, name })
+
+    // Restore persisted sidebar state so it doesn't pop open on route change
+    try {
+      const persisted = localStorage.getItem("sidebarMinimized")
+      if (persisted === "true") {
+        setIsMinimized(true)
+        onMinimizeChange?.(true)
+      }
+    } catch {}
   }, [])
 
   const navigationItems = [
@@ -55,6 +64,7 @@ const SharedSidebar = ({ onMinimizeChange }: SharedSidebarProps) => {
     const newMinimizedState = !isMinimized
     setIsMinimized(newMinimizedState)
     onMinimizeChange?.(newMinimizedState)
+    try { localStorage.setItem("sidebarMinimized", String(newMinimizedState)) } catch {}
   }
 
   const handleLogout = () => {

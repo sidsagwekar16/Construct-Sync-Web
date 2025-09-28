@@ -11,7 +11,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function VariationsPage() {
-  const [sidebarMinimized, setSidebarMinimized] = useState(false)
+  const [sidebarMinimized, setSidebarMinimized] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try { return localStorage.getItem('sidebarMinimized') === 'true' } catch { return false }
+    }
+    return false
+  })
   const queryClient = useQueryClient()
   const fetchWithError = async (url: string) => {
     const response = await fetch(url)

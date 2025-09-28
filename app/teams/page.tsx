@@ -9,7 +9,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 
 export default function TeamsPage() {
-  const [sidebarMinimized, setSidebarMinimized] = useState(false)
+  const [sidebarMinimized, setSidebarMinimized] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try { return localStorage.getItem('sidebarMinimized') === 'true' } catch { return false }
+    }
+    return false
+  })
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [createName, setCreateName] = useState("")
   const [createDescription, setCreateDescription] = useState("")

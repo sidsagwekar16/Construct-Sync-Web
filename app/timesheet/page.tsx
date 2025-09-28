@@ -13,7 +13,12 @@ import { useRouter, useSearchParams } from "next/navigation"
 
 
 export default function TimesheetPage() {
-  const [sidebarMinimized, setSidebarMinimized] = useState(false)
+  const [sidebarMinimized, setSidebarMinimized] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try { return localStorage.getItem('sidebarMinimized') === 'true' } catch { return false }
+    }
+    return false
+  })
   const queryClient = useQueryClient()
   const searchParams = useSearchParams()
   const router = useRouter()
