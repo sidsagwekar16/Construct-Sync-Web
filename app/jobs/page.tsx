@@ -8,13 +8,15 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { Job, Worker, JobIssue } from "@/shared/schema"
+import { Job, Worker, Team } from "@/shared/schema"
 import SharedSidebar from "@/components/shared-sidebar"
 
 export default function JobsPage() {
   const [sidebarMinimized, setSidebarMinimized] = useState(false)
-  const [activeTab,setActiveTab] = useState('in_progress')
-   const fetchWithError = async (url: string) => {
+  const [activeTab,setActiveTab] = useState('In progress')
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortAsc, setSortAsc] = useState(true)
+  const fetchWithError = async (url: string) => {
     const response = await fetch(url)
     if (!response.ok) {
       throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
@@ -22,15 +24,20 @@ export default function JobsPage() {
     return response.json()
   }
   
- const { data: jobs = [], isLoading: isJobsLoading } = useQuery<Job[]>({
+  const { data: jobs = [], isLoading: isJobsLoading } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
     queryFn: () => fetchWithError('/api/jobs'),
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
-   const { data: jotifications = [], } = useQuery<Notification[]>({
-    queryKey: ['/api/notifications'],
-    queryFn: () => fetchWithError('/api/notifications'),
-    staleTime: 1000 * 60 * 5, // 5 minutes
+  const { data: teams = [] } = useQuery<Team[]>({
+    queryKey: ['/api/teams'],
+    queryFn: () => fetchWithError('/api/teams'),
+    staleTime: 1000 * 60 * 5,
+  });
+  const { data: workers = [] } = useQuery<Worker[]>({
+    queryKey: ['/api/workers'],
+    queryFn: () => fetchWithError('/api/workers'),
+    staleTime: 1000 * 60 * 5,
   });
   const activeJobs = jobs.filter(job => job.status === 'in_progress');
   const SchJobs = jobs.filter(job => job.status === 'scheduled');
@@ -46,6 +53,25 @@ export default function JobsPage() {
   ]
   const currentTabJobs = statusTabs.find(tab => tab.label === activeTab)?.jobs || []
 
+  const teamIdToName = new Map<number, string>((teams as Team[]).map(t => [t.id, t.name]))
+  const workerIdToName = new Map<number, string>((workers as Worker[]).map(w => [w.id, w.name]))
+
+  const visibleJobs = (currentTabJobs as Job[])
+    .filter((job) => {
+      if (!searchQuery.trim()) return true
+      const q = searchQuery.toLowerCase()
+      return (
+        (job.address || '').toLowerCase().includes(q) ||
+        (job.clientName || '').toLowerCase().includes(q) ||
+        (job.jobType || '').toLowerCase().includes(q)
+      )
+    })
+    .sort((a, b) => {
+      const aEnd = new Date(a.endTime as any).getTime()
+      const bEnd = new Date(b.endTime as any).getTime()
+      return sortAsc ? aEnd - bEnd : bEnd - aEnd
+    })
+
   return (
     <div className="flex h-screen bg-[#eff0f6]">
       <SharedSidebar onMinimizeChange={setSidebarMinimized} />
@@ -60,10 +86,12 @@ export default function JobsPage() {
             </div>
             <div className="flex items-center gap-4">
               <Bell className="w-6 h-6 text-gray-600 cursor-pointer" />
-              <Button variant="outline" className="flex items-center gap-2 bg-transparent">
-                <MapPin className="w-4 h-4" />
-                Map View
-              </Button>
+              <Link href="/maps">
+                <Button variant="outline" className="flex items-center gap-2 bg-transparent">
+                  <MapPin className="w-4 h-4" />
+                  Map View
+                </Button>
+              </Link>
               <Link href="/jobs/add">
                 <Button className="bg-[#ff622a] hover:bg-[#fd7d4f] text-white">+ Add Job</Button>
               </Link>
@@ -78,12 +106,16 @@ export default function JobsPage() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#ff622a]" />
               <Input
                 placeholder="Search jobs by address, client or type..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]"
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">End date (Soonest first)</span>
-              <ChevronLeft className="w-4 h-4 text-gray-400 rotate-180" />
+              <button onClick={() => setSortAsc(!sortAsc)} className="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1">
+                End date ({sortAsc ? 'Soonest first' : 'Latest first'})
+                <ChevronLeft className={`w-4 h-4 text-gray-400 ${sortAsc ? 'rotate-180' : ''}`} />
+              </button>
             </div>
           </div>
 
@@ -106,13 +138,8 @@ export default function JobsPage() {
 
           {/* Job Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-<<<<<<< HEAD
-            {currentTabJobs.map((job) => (
-              <Card key={job.jobType} className="bg-white border border-gray-200 rounded-lg shadow-sm">
-=======
-            {jobs.map((job) => (
+            {visibleJobs.map((job) => (
               <Card key={job.id} className="bg-white border border-gray-200 rounded-lg shadow-sm">
->>>>>>> 7086a67d9a50d88f370848532167f2847537bea5
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -132,15 +159,17 @@ export default function JobsPage() {
                   <div className="space-y-3 mb-6">
                     <div className="flex items-center gap-3 text-sm text-gray-600">
                       <Users className="w-4 h-4" />
-                      <span>{job.assignedTo}</span>
+                      <span>{job.teamId ? (teamIdToName.get(Number(job.teamId)) || `Team ${job.teamId}`) : (job.assignedTo ? (workerIdToName.get(Number(job.assignedTo)) || `User ${job.assignedTo}`) : 'Unassigned')}</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-gray-600">
                       <Calendar className="w-4 h-4" />
-                      <span>{job.startTime.toString()} - {job.endTime.toString()}</span>
+                      <span>{new Date(job.startTime as any).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} - {new Date(job.endTime as any).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
                     </div>
                   </div>
 
-                  <Button className="w-full bg-[#ff622a] hover:bg-[#fd7d4f] text-white">View Details</Button>
+                  <Link href={`/jobs/${job.id}`}>
+                    <Button className="w-full bg-[#ff622a] hover:bg-[#fd7d4f] text-white">View Details</Button>
+                  </Link>
                 </CardContent>
               </Card>
             ))}

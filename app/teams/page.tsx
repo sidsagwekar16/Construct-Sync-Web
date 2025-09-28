@@ -5,6 +5,7 @@ import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Team, Worker } from "@/shared/schema"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 
 export default function TeamsPage() {
@@ -15,6 +16,12 @@ export default function TeamsPage() {
   const [editingTeam, setEditingTeam] = useState<Team | null>(null)
   const [editName, setEditName] = useState("")
   const [editDescription, setEditDescription] = useState("")
+  // Manage modal state
+  const [manageTeam, setManageTeam] = useState<Team | null>(null)
+  const [manageName, setManageName] = useState("")
+  const [manageDescription, setManageDescription] = useState("")
+  const [manageMembers, setManageMembers] = useState<number[]>([])
+  const [manageLeaderId, setManageLeaderId] = useState<number | null>(null)
   const queryClient = useQueryClient()
 
   const fetchWithError = async (url: string) => {
@@ -63,10 +70,12 @@ export default function TeamsPage() {
     },
   })
 
-  const startEdit = (team: Team) => {
-    setEditingTeam(team)
-    setEditName(team.name || "")
-    setEditDescription((team as any).description || "")
+  const openManage = (team: Team) => {
+    setManageTeam(team)
+    setManageName(team.name || "")
+    setManageDescription((team as any).description || "")
+    setManageMembers([...(team.workerIds || [])])
+    setManageLeaderId(team.leaderId || null)
   }
 
   const updateMutation = useMutation({
@@ -76,6 +85,21 @@ export default function TeamsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/teams'] })
       setEditingTeam(null)
+    },
+  })
+
+  const manageMutation = useMutation({
+    mutationFn: async (data: { id: number; name: string; description?: string; workerIds: number[]; leaderId: number | null }) => {
+      return apiRequest(`/api/teams/${data.id}`, 'PATCH', {
+        name: data.name,
+        description: data.description,
+        workerIds: data.workerIds,
+        leaderId: data.leaderId,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/teams'] })
+      setManageTeam(null)
     },
   })
 
@@ -106,7 +130,32 @@ export default function TeamsPage() {
           </div>
 
           {(isTeamsLoading || isWorkersLoading) && (
-            <div className="text-gray-600 mb-6">Loading teams...</div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div>
+                        <Skeleton className="h-5 w-48 mb-2" />
+                        <Skeleton className="h-4 w-40" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-32 mb-3" />
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {Array.from({ length: 4 }).map((_, j) => (
+                      <Skeleton key={j} className="h-7 w-24 rounded-full" />
+                    ))}
+                  </div>
+                  <div className="flex gap-3">
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
 
           {(isTeamsError || isWorkersError) && (
@@ -181,7 +230,7 @@ export default function TeamsPage() {
                 {/* Members */}
                 <div className="mb-6">
                   <p className="text-gray-500 text-sm mb-3">Members ({team.workerIds?.length ?? 0})</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 mb-3">
                     {(team.workerIds || []).map((memberId: number, index: number) => {
                       const name = workerIdToName.get(memberId) || `#${memberId}`
                       return (
@@ -193,40 +242,87 @@ export default function TeamsPage() {
                   </div>
                 </div>
 
+      {/* Manage Team Modal */}
+      {manageTeam && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center">
+          <div className="bg-white border border-gray-200 rounded-xl w-full max-w-3xl p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-gray-900">Edit Team</h3>
+              <Button variant="outline" className="bg-transparent" onClick={() => setManageTeam(null)}>Close</Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm text-gray-700 mb-2">Team Name</label>
+                <Input value={manageName} onChange={(e) => setManageName(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-2">Description</label>
+                <Input value={manageDescription} onChange={(e) => setManageDescription(e.target.value)} />
+              </div>
+            </div>
+            <div className="mb-4">
+              <p className="text-gray-500 text-sm mb-2">Members</p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {manageMembers.map((id) => (
+                  <span key={id} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
+                    {workerIdToName.get(id) || `#${id}`}
+                    <button className="ml-2 text-gray-400 hover:text-gray-700" onClick={() => setManageMembers(manageMembers.filter(x => x !== id))}>×</button>
+                  </span>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Tag-style add: pick one, instantly becomes a tag; repeat quickly */}
+                <select className="px-3 py-2 border border-gray-200 rounded-lg text-gray-700" onChange={(e) => {
+                  const val = parseInt(e.target.value || '0')
+                  if (!val) return
+                  setManageMembers(prev => Array.from(new Set([...prev, val])))
+                  e.currentTarget.value = ''
+                }}>
+                  <option value="">Add member…</option>
+                  {workers
+                    .filter(w => !manageMembers.includes(w.id))
+                    .sort((a,b) => (a.name || '').localeCompare(b.name || ''))
+                    .map(w => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                </select>
+                <div className="md:col-span-2">
+                  <select className="w-full px-3 py-2 border border-gray-200 rounded-lg text-gray-700" value={manageLeaderId ?? ''} onChange={(e) => setManageLeaderId(e.target.value ? parseInt(e.target.value) : null)}>
+                  <option value="">Select leader…</option>
+                  {manageMembers.map(id => (
+                    <option key={id} value={id}>{workerIdToName.get(id) || `#${id}`}</option>
+                  ))}
+                  </select>
+                </div>
+                
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-4">
+              <Button className="border border-red-300 text-red-600 hover:bg-red-50" variant="outline" onClick={() => {
+                if (confirm('Delete this team?')) deleteMutation.mutate(manageTeam.id)
+              }}>Delete Team</Button>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setManageTeam(null)}>Cancel</Button>
+                <Button
+                  className="bg-[#ff622a] hover:bg-[#e55520] text-white"
+                  disabled={manageMutation.isPending || !manageName}
+                  onClick={() => manageMutation.mutate({ id: manageTeam.id, name: manageName, description: manageDescription || undefined, workerIds: manageMembers, leaderId: manageLeaderId })}
+                >
+                  {manageMutation.isPending ? 'Saving…' : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
                 {/* Action Buttons */}
                 <div className="flex gap-3">
-                  <Button className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700" variant="outline" onClick={() => startEdit(team)}>
+                  <Button className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700" variant="outline" onClick={() => openManage(team)}>
                     Edit Team
-                  </Button>
-                  <Button className="flex-1 bg-red-500 hover:bg-red-600 text-white" onClick={() => {
-                    if (window.confirm('Delete this team?')) deleteMutation.mutate(team.id)
-                  }}>
-                    {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
                   </Button>
                 </div>
 
-                {/* Edit form inline */}
-                {editingTeam && editingTeam.id === team.id && (
-                  <div className="mt-6 border-t border-gray-200 pt-6">
-                    <h4 className="text-md font-semibold text-gray-900 mb-3">Edit Team</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <label className="block text-sm text-gray-700 mb-2">Team Name</label>
-                        <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-700 mb-2">Description</label>
-                        <Input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button disabled={!editName || updateMutation.isPending} className="bg-[#ff622a] hover:bg-[#e55520] text-white" onClick={() => updateMutation.mutate({ id: team.id, name: editName, description: editDescription || undefined })}>
-                        {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-                      </Button>
-                      <Button variant="outline" className="bg-transparent" onClick={() => setEditingTeam(null)}>Cancel</Button>
-                    </div>
-                  </div>
-                )}
+                {/* Inline edit removed in favor of modal */}
               </div>
             ))}
           </div>

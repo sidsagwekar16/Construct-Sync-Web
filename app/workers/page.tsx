@@ -5,10 +5,12 @@ import { SharedSidebar } from "@/components/shared-sidebar"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, Phone, Mail, Users, DollarSign } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Worker } from "@/shared/schema"
 
 export default function WorkersPage() {
   const [isMinimized, setIsMinimized] = useState(false)
+  const [selectedWorker, setSelectedWorker] = useState<any | null>(null)
 
   const fetchWithError = async (url: string) => {
     const response = await fetch(url)
@@ -33,6 +35,19 @@ export default function WorkersPage() {
 
   const capitalize = (s?: string | null) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
+  const [roleFilter, setRoleFilter] = useState<string>("All Roles")
+  const [statusFilter, setStatusFilter] = useState<string>("All Statuses")
+  const [typeFilter, setTypeFilter] = useState<string>("All Types")
+  const [teamFilter, setTeamFilter] = useState<string>("All Teams")
+
+  const filteredWorkers = workers.filter((w) => {
+    const roleOk = roleFilter === "All Roles" || (w.role || "").toLowerCase() === roleFilter.toLowerCase()
+    const statusOk = statusFilter === "All Statuses" || (w.status || "").toLowerCase() === statusFilter.toLowerCase().replace(" ", "_")
+    const typeOk = typeFilter === "All Types" || (w.type || "").toLowerCase() === typeFilter.toLowerCase()
+    const teamOk = teamFilter === "All Teams" || (teamFilter === "Unassigned" ? !w.teamId : `Team ${w.teamId}` === teamFilter)
+    return roleOk && statusOk && typeOk && teamOk
+  })
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <SharedSidebar onMinimizeChange={setIsMinimized} />
@@ -50,8 +65,77 @@ export default function WorkersPage() {
             </Button>
           </div>
 
+          {/* Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div className="relative">
+              <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg appearance-none cursor-pointer text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#ff622a] focus:border-transparent">
+                <option>All Roles</option>
+                <option>admin</option>
+                <option>manager</option>
+                <option>worker</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            </div>
+
+            <div className="relative">
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg appearance-none cursor-pointer text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#ff622a] focus:border-transparent">
+                <option>All Statuses</option>
+                <option>available</option>
+                <option>on_job</option>
+                <option>off_duty</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            </div>
+
+            <div className="relative">
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg appearance-none cursor-pointer text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#ff622a] focus:border-transparent">
+                <option>All Types</option>
+                <option>employee</option>
+                <option>subcontractor</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            </div>
+
+            <div className="relative">
+              <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg appearance-none cursor-pointer text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#ff622a] focus:border-transparent">
+                <option>All Teams</option>
+                <option>Unassigned</option>
+                {Array.from(new Set(workers.map(w => w.teamId).filter(Boolean))).map((tid) => (
+                  <option key={String(tid)}>Team {tid}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+
           {isLoading && (
-            <div className="text-gray-600">Loading workers...</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div>
+                        <Skeleton className="h-5 w-40 mb-2" />
+                        <Skeleton className="h-4 w-24" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                  </div>
+                  <div className="space-y-3 mb-6">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-4 w-52" />
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
 
           {isError && (
@@ -63,52 +147,11 @@ export default function WorkersPage() {
             </div>
           )}
 
-          {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <div className="relative">
-              <select className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg appearance-none cursor-pointer text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#ff622a] focus:border-transparent">
-                <option>All Roles</option>
-                <option>Employee</option>
-                <option>Contractor</option>
-                <option>Manager</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-
-            <div className="relative">
-              <select className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg appearance-none cursor-pointer text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#ff622a] focus:border-transparent">
-                <option>All Statuses</option>
-                <option>Available</option>
-                <option>Busy</option>
-                <option>On Leave</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-
-            <div className="relative">
-              <select className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg appearance-none cursor-pointer text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#ff622a] focus:border-transparent">
-                <option>All Types</option>
-                <option>Full-time</option>
-                <option>Part-time</option>
-                <option>Contract</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-
-            <div className="relative">
-              <select className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg appearance-none cursor-pointer text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#ff622a] focus:border-transparent">
-                <option>All Teams</option>
-                <option>Alpha Team</option>
-                <option>Beta Team</option>
-                <option>Gamma Team</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
+          
 
           {/* Workers Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {workers.map((worker) => (
+            {filteredWorkers.map((worker) => (
               <div
                 key={worker.id}
                 className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow"
@@ -170,27 +213,66 @@ export default function WorkersPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1 border-gray-200 text-gray-600 hover:bg-gray-50 bg-transparent"
-                  >
-                    Team
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 border-gray-200 text-gray-600 hover:bg-gray-50 bg-transparent"
+                    onClick={() => setSelectedWorker(worker)}
                   >
                     Details
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 bg-transparent"
+                    className="flex-1 border-gray-200 text-gray-600 hover:bg-gray-50 bg-transparent"
                   >
-                    Delete
+                    Edit
                   </Button>
                 </div>
               </div>
             ))}
           </div>
+
+          {/* Details Modal */}
+          {selectedWorker && (
+            <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center">
+              <div className="bg-white rounded-xl border border-gray-200 w-full max-w-2xl p-6 shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold text-gray-900">{selectedWorker.name}</h3>
+                  <Button variant="outline" className="bg-transparent" onClick={() => setSelectedWorker(null)}>Close</Button>
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-gray-500 text-sm mb-1">Email</p>
+                    <p className="text-gray-800">{selectedWorker.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-sm mb-1">Phone</p>
+                    <p className="text-gray-800">{selectedWorker.phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-sm mb-1">Role</p>
+                    <p className="text-gray-800 capitalize">{selectedWorker.type || selectedWorker.role}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-sm mb-1">Hourly Rate</p>
+                    <p className="text-gray-800">{formatCurrency(selectedWorker.hourlyRate)}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-gray-500 text-sm mb-2">Skills</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(selectedWorker.skills || []).map((s: string, i: number) => (
+                        <span key={i} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="text-sm text-gray-600">Team: {selectedWorker.teamId ? `Team ${selectedWorker.teamId}` : 'Unassigned'}</div>
+                  <div className="flex gap-2">
+                    <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => { if (confirm('Delete this worker?')) {/* wire up when endpoint ready */} }}>Delete</Button>
+                    <Button variant="outline">Edit</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

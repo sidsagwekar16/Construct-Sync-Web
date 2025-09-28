@@ -36,10 +36,11 @@ export default function MapsPage() {
     condition: 'sunny',
     riskLevel: 'low'
   })
+  const [weatherSiteId, setWeatherSiteId] = useState<string>("")
 
   // Fetch jobs data
   const fetchWithError = async (url: string) => {
-    const response = await fetch(url)
+    const response = await fetch(url, { credentials: 'include' as RequestCredentials })
     if (!response.ok) {
       throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
     }
@@ -52,49 +53,15 @@ export default function MapsPage() {
     staleTime: 1000 * 60 * 5, // 5 minutes
   })
 
-  // Sample job sites for demonstration
-  const sampleJobSites = [
-    {
-      id: "1",
-      jobType: "Plumbing Installation",
-      address: "123 Queen Street, Auckland CBD, Auckland 1010",
-      status: "in_progress" as const,
-      latitude: -36.8485,
-      longitude: 174.7633,
-      startTime: new Date().toISOString(),
-      endTime: new Date().toISOString()
-    },
-    {
-      id: "2", 
-      jobType: "HVAC Maintenance",
-      address: "456 Albert Street, Auckland CBD, Auckland 1010",
-      status: "scheduled" as const,
-      latitude: -36.8465,
-      longitude: 174.7645,
-      startTime: new Date().toISOString(),
-      endTime: new Date().toISOString()
-    },
-    {
-      id: "3",
-      jobType: "Electrical Work",
-      address: "789 Customs Street, Auckland CBD, Auckland 1010", 
-      status: "completed" as const,
-      latitude: -36.8442,
-      longitude: 174.7691,
-      startTime: new Date().toISOString(),
-      endTime: new Date().toISOString()
-    }
-  ]
-
   const jobSites = jobs.filter((job)=>selectedStatus === job.status)
 
   const handleSiteSelection = (job: Job) => {
     setSelectedSite(job)
     setSelectedLocation(job.address || "")
+    setWeatherSiteId(job.id?.toString?.() || "")
   }
 
   const handleExportReport = () => {
-    // Create a simple report
     const reportData = {
       selectedSite: selectedSite?.address || "No site selected",
       weather: weatherData,
@@ -119,10 +86,6 @@ export default function MapsPage() {
 
   const handleSetWeatherAlerts = () => {
     alert("Weather alerts configured! You will be notified of severe weather conditions.")
-  }
-
-  const handleScheduleAdjustments = () => {
-    alert("Schedule adjustment interface opened. Redirecting to timeline view...")
   }
 
   const handleAddEntry = () => {
@@ -158,6 +121,27 @@ export default function MapsPage() {
         return 'text-gray-600'
     }
   }
+
+  // Weather: fetch site-specific weather when a site is chosen (dropdown or map)
+  useQuery<any>({
+    queryKey: ['/api/mobile/weather/job', weatherSiteId],
+    queryFn: async () => {
+      if (!weatherSiteId) return null
+      const data = await fetchWithError(`/api/mobile/weather/job/${weatherSiteId}`)
+      const current = data.current || data.weather || {}
+      setWeatherData({
+        temperature: Number(current.temp ?? 22),
+        humidity: Number(current.humidity ?? 65),
+        windSpeed: Number(current.wind_speed ?? 15),
+        visibility: Number(current.visibility ?? 10),
+        condition: (String(current.condition || 'Sunny').toLowerCase().includes('rain') ? 'rainy' : String(current.condition || 'Sunny').toLowerCase().includes('cloud') ? 'cloudy' : 'sunny') as any,
+        riskLevel: (Number(current.wind_speed ?? 0) > 25 ? 'high' : Number(current.wind_speed ?? 0) > 15 ? 'medium' : 'low')
+      })
+      return data
+    },
+    enabled: !!weatherSiteId,
+    staleTime: 1000 * 60 * 5,
+  })
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -296,16 +280,22 @@ export default function MapsPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-xl font-semibold">Weather Intelligence</h2>
-                <p className="text-sm text-gray-600">Auckland CBD • Real-time weather monitoring</p>
+                <p className="text-sm text-gray-600">{selectedSite?.address?.split(',')[0] || 'Select a site on the map'} • Real-time weather monitoring</p>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-[#ff622a] border-[#ff622a] bg-transparent hover:bg-[#ff622a] hover:text-white"
-                onClick={() => alert("Detailed weather view opened")}
-              >
-                View more
-              </Button>
+              <div className="flex items-center gap-2">
+                <Select value={weatherSiteId} onValueChange={(val) => setWeatherSiteId(val)}>
+                  <SelectTrigger className="w-64">
+                    <SelectValue placeholder="Choose a job site" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jobs.map((j) => (
+                      <SelectItem key={`weather-${j.id}`} value={j.id.toString()}>
+                        {j.address?.split(',')[0] || `Site #${j.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -385,15 +375,6 @@ export default function MapsPage() {
                   >
                     <Bell className="w-4 h-4 mr-2" />
                     Set Weather Alerts
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full justify-start bg-transparent hover:bg-gray-50"
-                    onClick={handleScheduleAdjustments}
-                  >
-                    <Calendar className="w-4 h-4 mr-2" />
-                    Schedule Adjustments
                   </Button>
                 </CardContent>
               </Card>

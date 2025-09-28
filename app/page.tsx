@@ -240,43 +240,51 @@ const getCalendarItems = () => {
                   View All
                 </Button>
               </div>
-              <div className="space-y-4">
-                {workers.map((person, index) => (
-                  <div key={index} className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-[#fff0ea] rounded-full flex items-center justify-center">
-                      <span className="text-[#ff622a] font-semibold">N</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900">{person.name}</div>
-                      <div className="text-sm text-[#ff622a]">{person.role}</div>
-                    </div>
-                    <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
-                      {person.status}
-                    </Badge>
+              <Card className="bg-white border border-gray-200 rounded-2xl shadow-sm">
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    {workers.map((person, index) => (
+                      <div key={index} className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-[#fff0ea] rounded-full flex items-center justify-center">
+                          <span className="text-[#ff622a] font-semibold">N</span>
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{person.name}</div>
+                          <div className="text-sm text-[#ff622a]">{person.role}</div>
+                        </div>
+                        <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
+                          {person.status}
+                        </Badge>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Recent Activity */}
             <div>
               <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Activity</h3>
-              <div className="space-y-4">
-                {timeEntries.map((activity, index) => (
-                  <div key={index} className="flex items-center gap-4">
-                    <div className="w-6 h-6 text-[#ff622a]">
-                      <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1">
-                      <span className="font-medium text-gray-900">{activity.workerName}</span>
-                      <span className="text-gray-600"> Checked in at  {activity.jobName}</span>
-                    </div>
-                    <Badge className="bg-[#192d47] text-white text-xs px-2 py-1">{activity.date}</Badge>
+              <Card className="bg-white border border-gray-200 rounded-2xl shadow-sm">
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    {timeEntries.map((activity, index) => (
+                      <div key={index} className="flex items-center gap-4">
+                        <div className="w-6 h-6 text-[#ff622a]">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <span className="font-medium text-gray-900">{activity.workerName}</span>
+                          <span className="text-gray-600"> Checked in at  {activity.jobName}</span>
+                        </div>
+                        <Badge className="bg-[#192d47] text-white text-xs px-2 py-1">{activity.date}</Badge>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>

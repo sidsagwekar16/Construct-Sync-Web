@@ -1,3 +1,5 @@
+"use client"
+
 import {
   Bell,
   Calendar,
@@ -21,8 +23,69 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
+import { useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 export default function AddVariantPage() {
+  const queryClient = useQueryClient()
+  const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [jobId, setJobId] = useState<number | "">("")
+  const [status, setStatus] = useState("open")
+  const [priority, setPriority] = useState("medium")
+  const [isChargeable, setIsChargeable] = useState(false)
+  const [requiresSubcontractor, setRequiresSubcontractor] = useState(false)
+  const [clientAmount, setClientAmount] = useState<string>("")
+  const [materialsClientCharge, setMaterialsClientCharge] = useState<string>("")
+  const [materialsActualCost, setMaterialsActualCost] = useState<string>("")
+  const [subcontractorAmount, setSubcontractorAmount] = useState<string>("")
+  const [laborCost, setLaborCost] = useState<string>("")
+
+  const fetchWithError = async (url: string) => {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
+    return response.json()
+  }
+
+  const { data: jobs = [] } = useQuery<any[]>({
+    queryKey: ['/api/jobs'],
+    queryFn: () => fetchWithError('/api/jobs'),
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const createVariation = useMutation({
+    mutationFn: async () => {
+      const body: any = {
+        jobId: Number(jobId),
+        title,
+        description,
+        status,
+        priority,
+        isVariation: true,
+        isChargeable,
+        requiresSubcontractor,
+        pricingModel: 'fixed',
+      }
+      if (clientAmount) body.clientAmount = Number(clientAmount)
+      if (materialsClientCharge) body.materialsClientCharge = Number(materialsClientCharge)
+      if (materialsActualCost) body.materialsActualCost = Number(materialsActualCost)
+      if (subcontractorAmount) body.subcontractorAmount = Number(subcontractorAmount)
+      if (laborCost) body.laborCost = Number(laborCost)
+
+      const res = await fetch('/api/variations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) throw new Error(`Create variation failed: ${res.statusText}`)
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/variations'] })
+      window.location.href = '/variations'
+    }
+  })
   const navigationItems = [
     { icon: Home, label: "Dashboard", active: false, href: "/dashboard" },
     { icon: Briefcase, label: "Jobs", active: false, href: "/" },
@@ -124,29 +187,23 @@ export default function AddVariantPage() {
                 {/* Title */}
                 <div>
                   <label className="block text-sm font-medium text-gray-900 mb-2">Title</label>
-                  <Input
-                    placeholder="Enter Variation Title"
-                    className="border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]"
-                  />
+                  <Input placeholder="Enter Variation Title" value={title} onChange={(e) => setTitle(e.target.value)} className="border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]" />
                 </div>
 
                 {/* Description */}
                 <div>
                   <label className="block text-sm font-medium text-gray-900 mb-2">Description</label>
-                  <Textarea
-                    placeholder="Describe the variation details"
-                    rows={4}
-                    className="border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]"
-                  />
+                  <Textarea placeholder="Describe the variation details" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} className="border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]" />
                 </div>
 
                 {/* Job Address */}
                 <div>
                   <label className="block text-sm font-medium text-gray-900 mb-2">Job Address</label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:border-[#ff622a] focus:ring-[#ff622a] focus:outline-none text-gray-500">
-                    <option>Select Job Address</option>
-                    <option>123 Main Street, City A</option>
-                    <option>456 Oak Avenue, City B</option>
+                  <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:border-[#ff622a] focus:ring-[#ff622a] focus:outline-none text-gray-500" value={jobId} onChange={(e) => setJobId(e.target.value ? Number(e.target.value) : "") }>
+                    <option value="">Select Job</option>
+                    {jobs.map((j: any) => (
+                      <option key={j.id} value={j.id}>{j.address}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -162,18 +219,18 @@ export default function AddVariantPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Status</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:border-[#ff622a] focus:ring-[#ff622a] focus:outline-none">
-                      <option>Open</option>
-                      <option>In Progress</option>
-                      <option>Completed</option>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:border-[#ff622a] focus:ring-[#ff622a] focus:outline-none" value={status} onChange={(e) => setStatus(e.target.value)}>
+                      <option value="open">Open</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="completed">Completed</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Priority</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:border-[#ff622a] focus:ring-[#ff622a] focus:outline-none">
-                      <option>Medium</option>
-                      <option>High</option>
-                      <option>Low</option>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:border-[#ff622a] focus:ring-[#ff622a] focus:outline-none" value={priority} onChange={(e) => setPriority(e.target.value)}>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="low">Low</option>
                     </select>
                   </div>
                 </div>
@@ -217,22 +274,14 @@ export default function AddVariantPage() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">Subcontractor cost ($)</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          className="pl-8 border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]"
-                        />
+                        <Input type="number" placeholder="0" value={subcontractorAmount} onChange={(e) => setSubcontractorAmount(e.target.value)} className="pl-8 border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]" />
                       </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-900 mb-2">Labor cost ($)</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          className="pl-8 border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]"
-                        />
+                        <Input type="number" placeholder="0" value={laborCost} onChange={(e) => setLaborCost(e.target.value)} className="pl-8 border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]" />
                       </div>
                     </div>
                   </div>
@@ -247,11 +296,7 @@ export default function AddVariantPage() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">Materials Amount ($)</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          className="pl-8 border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]"
-                        />
+                        <Input type="number" placeholder="0" value={materialsClientCharge} onChange={(e) => setMaterialsClientCharge(e.target.value)} className="pl-8 border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]" />
                       </div>
                       <p className="text-xs text-gray-500 mt-1">What you charge for the client</p>
                     </div>
@@ -259,11 +304,7 @@ export default function AddVariantPage() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">Materials Cost ($)</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          className="pl-8 border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]"
-                        />
+                        <Input type="number" placeholder="0" value={materialsActualCost} onChange={(e) => setMaterialsActualCost(e.target.value)} className="pl-8 border-gray-300 focus:border-[#ff622a] focus:ring-[#ff622a]" />
                       </div>
                       <p className="text-xs text-gray-500 mt-1">What you pay for materials</p>
                     </div>
@@ -273,11 +314,11 @@ export default function AddVariantPage() {
                   <div className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600">Materials Profit:</span>
-                      <span className="text-green-600 font-semibold">$0.00</span>
+                      <span className="text-green-600 font-semibold">${((Number(materialsClientCharge||0) - Number(materialsActualCost||0)) || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600">Margin:</span>
-                      <span className="text-green-600 font-semibold">0.0%</span>
+                      <span className="text-green-600 font-semibold">{(Number(materialsClientCharge||0) > 0 ? (((Number(materialsClientCharge||0) - Number(materialsActualCost||0)) / Number(materialsClientCharge||0)) * 100) : 0).toFixed(1)}%</span>
                     </div>
                   </div>
                 </div>
@@ -285,13 +326,13 @@ export default function AddVariantPage() {
                 {/* Checkboxes */}
                 <div className="flex flex-wrap gap-6 pt-4">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="chargeable" />
+                    <Checkbox id="chargeable" checked={isChargeable} onCheckedChange={(v) => setIsChargeable(!!v)} />
                     <label htmlFor="chargeable" className="text-sm font-medium text-gray-900">
                       Chargeable to Client
                     </label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="subcontractor" />
+                    <Checkbox id="subcontractor" checked={requiresSubcontractor} onCheckedChange={(v) => setRequiresSubcontractor(!!v)} />
                     <label htmlFor="subcontractor" className="text-sm font-medium text-gray-900">
                       Requires Subcontractor
                     </label>
@@ -311,7 +352,9 @@ export default function AddVariantPage() {
                       Cancel
                     </Button>
                   </Link>
-                  <Button className="bg-[#ff622a] hover:bg-[#fd7d4f] text-white">Create Variation</Button>
+                  <Button className="bg-[#ff622a] hover:bg-[#fd7d4f] text-white" disabled={!title || !jobId || createVariation.isPending} onClick={() => createVariation.mutate()}>
+                    {createVariation.isPending ? 'Creating...' : 'Create Variation'}
+                  </Button>
                 </div>
               </div>
             </CardContent>
