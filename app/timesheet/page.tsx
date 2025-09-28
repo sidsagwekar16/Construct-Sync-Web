@@ -7,36 +7,32 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import SharedSidebar from "@/components/shared-sidebar"
+import { useQuery } from "@tanstack/react-query"
+
 
 export default function TimesheetPage() {
   const [sidebarMinimized, setSidebarMinimized] = useState(false)
+  const fetchWithError = async (url: string) => {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
+    }
+    return response.json()
+  }
+   const { data: workers = [], isLoading: isWorkersLoading } = useQuery<Worker[]>({
+      queryKey: ['/api/workers'],
+      queryFn: () => fetchWithError('/api/workers'),
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    });
+  
+    // Fetch time entries data
+    const { data: timeEntries = [], isLoading: isTimeEntriesLoading } = useQuery<any[]>({
+      queryKey: ['/api/time-entries/active'],
+      queryFn: () => fetchWithError('/api/time-entries/active'),
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    });
 
-  const activeWorkers = [
-    {
-      name: "Worker Name",
-      date: "DD-MM-YYYY",
-      checkIn: "00:00 AM",
-      site: "Site Name",
-      earnings: "$7837.79",
-      hours: "74h53m",
-    },
-    {
-      name: "Worker Name",
-      date: "DD-MM-YYYY",
-      checkIn: "00:00 AM",
-      site: "Site Name",
-      earnings: "$7837.79",
-      hours: "74h53m",
-    },
-    {
-      name: "Worker Name",
-      date: "DD-MM-YYYY",
-      checkIn: "00:00 AM",
-      site: "Site Name",
-      earnings: "$7837.79",
-      hours: "74h53m",
-    },
-  ]
+  const activeWorkers = timeEntries
 
   const expenseProjections = [
     { amount: "$7965.36", period: "+ 1 Hour" },
@@ -128,7 +124,7 @@ export default function TimesheetPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-3">
-                          <span className="font-semibold text-gray-900">{worker.name}</span>
+                          <span className="font-semibold text-gray-900">{worker.workerName}</span>
                           <Badge className="bg-[#d4ffe0] text-[#007822] border-green-200 text-xs">ACTIVE</Badge>
                         </div>
 
@@ -139,12 +135,12 @@ export default function TimesheetPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4" />
-                            <span>Check-in : {worker.checkIn}</span>
+                            <span>Check-in : {worker.checkInTime}</span>
                             <Badge className="bg-[#ffa686] text-white text-xs ml-2">Still Working</Badge>
                           </div>
                           <div className="flex items-center gap-2">
                             <MapPin className="w-4 h-4 text-[#ff622a]" />
-                            <span>{worker.site}</span>
+                            <span>{worker.jobName}</span>
                           </div>
                         </div>
                       </div>
@@ -152,7 +148,7 @@ export default function TimesheetPage() {
                       <div className="flex items-center gap-6">
                         <div className="text-right">
                           <div className="text-lg font-bold text-gray-900 bg-[#d4ffe0] px-3 py-1 rounded mb-1">
-                            {worker.earnings}
+                            {worker.billingRate}
                           </div>
                           <div className="text-sm text-[#ff622a] bg-[#ffeee8] px-3 py-1 rounded">{worker.hours}</div>
                         </div>

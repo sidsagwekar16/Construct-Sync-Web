@@ -13,6 +13,7 @@ import SharedSidebar from "@/components/shared-sidebar"
 
 export default function JobsPage() {
   const [sidebarMinimized, setSidebarMinimized] = useState(false)
+  const [activeTab,setActiveTab] = useState('in_progress')
    const fetchWithError = async (url: string) => {
     const response = await fetch(url)
     if (!response.ok) {
@@ -26,18 +27,24 @@ export default function JobsPage() {
     queryFn: () => fetchWithError('/api/jobs'),
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
+   const { data: jotifications = [], } = useQuery<Notification[]>({
+    queryKey: ['/api/notifications'],
+    queryFn: () => fetchWithError('/api/notifications'),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
   const activeJobs = jobs.filter(job => job.status === 'in_progress');
   const SchJobs = jobs.filter(job => job.status === 'scheduled');
   const completedJobs = jobs.filter(job => job.status === 'completed');
   const archivedJobs = jobs.filter(job => job.status === 'archived');
   
   const statusTabs = [
-    { label: "In progress", count: activeJobs.length, active: true },
-    { label: "Scheduled", count: SchJobs.length, active: false },
-    { label: "Completed", count: completedJobs.length, active: false },
-    { label: "All", count: jobs.length, active: false },
-    { label: "Archived", count: 0, active: false },
+    { label: "In progress", count: activeJobs.length,jobs:activeJobs },
+    { label: "Scheduled", count: SchJobs.length,jobs:SchJobs  },
+    { label: "Completed", count: completedJobs.length,jobs:completedJobs },
+    { label: "All", count: jobs.length, jobs:jobs },
+    { label: "Archived", count: archivedJobs.length,jobs:archivedJobs },
   ]
+  const currentTabJobs = statusTabs.find(tab => tab.label === activeTab)?.jobs || []
 
   return (
     <div className="flex h-screen bg-[#eff0f6]">
@@ -83,13 +90,14 @@ export default function JobsPage() {
           {/* Status Tabs */}
           <div className="flex gap-2 mb-8">
             {statusTabs.map((tab, index) => (
-              <div
+              <div 
                 key={index}
                 className={`px-4 py-2 rounded-full text-sm font-medium cursor-pointer transition-colors ${
-                  tab.active
+                  activeTab == tab.label
                     ? "bg-[#fff0ea] text-[#ff622a] border border-[#ffd4c5]"
                     : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
                 }`}
+                onClick={()=>setActiveTab(tab.label)}
               >
                 {tab.label} <span className="ml-1">{tab.count}</span>
               </div>
@@ -98,32 +106,32 @@ export default function JobsPage() {
 
           {/* Job Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {statusTabs..map((job) => (
-              <Card key={job} className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            {currentTabJobs.map((job) => (
+              <Card key={job.jobType} className="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-6 h-6 bg-[#ff622a] rounded-full flex items-center justify-center">
                         <MapPin className="w-4 h-4 text-white" />
                       </div>
-                      <h3 className="font-semibold text-gray-900">Site Name</h3>
+                      <h3 className="font-semibold text-gray-900">{job.address}</h3>
                       <Badge variant="secondary" className="bg-[#fff0ea] text-[#ff622a] border-[#ffd4c5]">
-                        Jefferson Pan
+                        {job.clientName}
                       </Badge>
                     </div>
                     <MoreVertical className="w-5 h-5 text-gray-400 cursor-pointer" />
                   </div>
 
-                  <p className="text-gray-600 mb-4">24a Grampian Rd, St Heliers</p>
+                  <p className="text-gray-600 mb-4">{job.address}</p>
 
                   <div className="space-y-3 mb-6">
                     <div className="flex items-center gap-3 text-sm text-gray-600">
                       <Users className="w-4 h-4" />
-                      <span>Assignee</span>
+                      <span>{job.assignedTo}</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-gray-600">
                       <Calendar className="w-4 h-4" />
-                      <span>Sep 2 - Sep 30</span>
+                      <span>{job.startTime.toString()} - {job.endTime.toString()}</span>
                     </div>
                   </div>
 

@@ -5,29 +5,40 @@ import { SharedSidebar } from "@/components/shared-sidebar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Search, ChevronLeft, ChevronRight } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { Job } from "@/shared/schema"
+import { isPast, format } from "date-fns"
 
 export default function TimelinePage() {
   const [isMinimized, setIsMinimized] = useState(false)
   const [activeView, setActiveView] = useState("Calendar")
-  const [activeTimeView, setActiveTimeView] = useState("Week")
+  const [activeTimeView, setActiveTimeView] = useState("Month")
 
-  // Sample calendar data
-  const calendarEvents = [
-    { date: 3, title: "Sitename", tasks: "Task1, Task2, Task3", color: "bg-[#ff8c8c]" },
-    { date: 4, title: "Sitename", tasks: "Task1, Task2, Task3", color: "bg-[#ff8c8c]" },
-    { date: 11, title: "Sitename", tasks: "Task1, Task2, Task3", color: "bg-[#ff8c8c]" },
-    { date: 12, title: "Sitename", tasks: "Task1, Task2, Task3", color: "bg-[#ff8c8c]" },
-    { date: 15, title: "Sitename", tasks: "Task1, Task2, Task3", color: "bg-[#c7ffd7]" },
-    { date: 16, title: "Sitename", tasks: "Task1, Task2, Task3", color: "bg-[#c7ffd7]" },
-    { date: 17, title: "Sitename", tasks: "Task1, Task2, Task3", color: "bg-[#c7ffd7]" },
-    { date: 18, title: "Sitename", tasks: "Task1, Task2, Task3", color: "bg-[#c7ffd7]" },
-    { date: 19, title: "Sitename", tasks: "Task1, Task2, Task3", color: "bg-[#c7ffd7]" },
-    { date: 20, title: "Sitename", tasks: "Task1, Task2, Task3", color: "bg-[#c7ffd7]" },
-  ]
+  const fetchWithError = async (url: string) => {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
+    }
+    return response.json()
+  }
+  
+  const { data: jobs = [], isLoading: isJobsLoading } = useQuery<Job[]>({
+    queryKey: ['/api/jobs'],
+    queryFn: () => fetchWithError('/api/jobs'),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  // Sample events for demonstration (remove when jobs API is working)
+
 
   const getDaysInMonth = () => {
-    const daysInMonth = 30 // September has 30 days
-    const firstDayOfWeek = 0 // September 1st is a Sunday (0)
+    const today = new Date()
+    const currentMonth = today.getMonth()
+    const currentYear = today.getFullYear()
+    
+    // Get the actual days in the current month
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+    const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay()
     const days = []
 
     // Add empty cells for days before the first day of the month
@@ -44,7 +55,38 @@ export default function TimelinePage() {
   }
 
   const getEventForDate = (date: number) => {
-    return calendarEvents.find((event) => event.date === date)
+    // First try to get from jobs data
+    if (jobs && jobs.length > 0) {
+      const targetDate = new Date()
+      targetDate.setDate(date)
+      
+      const dayJobs = jobs.filter(job => {
+        const jobDate = new Date(job.startTime)
+        return jobDate.getDate() === date
+      })
+      
+      if (dayJobs.length > 0) {
+        const firstJob = dayJobs[0]
+        return {
+          title: firstJob.jobType || 'Job',
+          tasks: `${dayJobs.length} task${dayJobs.length > 1 ? 's' : ''}`,
+          type: 'normal'
+        }
+      }
+    }
+    
+    // Fallback to sample events
+    
+  }
+
+  const getCurrentMonth = () => {
+    const today = new Date()
+    return format(today, 'MMMM yyyy')
+  }
+
+  const getCurrentMonthName = () => {
+    const today = new Date()
+    return format(today, 'MMMM')
   }
 
   return (
@@ -60,7 +102,9 @@ export default function TimelinePage() {
                 <h1 className="text-2xl font-semibold text-[#232323] mb-2">Schedule & Timeline</h1>
                 <p className="text-[#999999]">Manage and view all jobs across different timelines</p>
               </div>
-              <Button className="bg-[#ff622a] hover:bg-[#d93900] text-white px-6 py-2 rounded-lg">+ Add New Job</Button>
+              <Button className="bg-[#ff622a] hover:bg-[#d93900] text-white px-6 py-2 rounded-lg">
+                + Add New Job
+              </Button>
             </div>
           </div>
 
@@ -97,68 +141,116 @@ export default function TimelinePage() {
             ))}
           </div>
 
-          {/* Calendar Section */}
-          <div className="bg-white rounded-lg p-6 border border-[#e4e4e7]">
-            {/* Calendar Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-4">
-                <Button variant="ghost" size="sm">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <h2 className="text-xl font-semibold text-[#232323]">September</h2>
-                <Button variant="ghost" size="sm">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="flex gap-2">
-                {["Week", "Month", "Today"].map((timeView) => (
-                  <Button
-                    key={timeView}
-                    onClick={() => setActiveTimeView(timeView)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                      activeTimeView === timeView
-                        ? "bg-[#f6f6f6] text-[#232323] border border-[#e4e4e7]"
-                        : "bg-transparent text-[#999999] hover:bg-[#f6f6f6]"
-                    }`}
-                  >
-                    {timeView}
+          {/* Calendar Section - Only show if Calendar view is active */}
+          {activeView === "Calendar" && (
+            <div className="bg-white rounded-lg p-6 border border-[#e4e4e7]">
+              {/* Calendar Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <Button variant="ghost" size="sm">
+                    <ChevronLeft className="h-4 w-4" />
                   </Button>
+                  <h2 className="text-xl font-semibold text-[#232323]">
+                    {getCurrentMonthName()}
+                  </h2>
+                  <Button variant="ghost" size="sm">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="flex gap-2">
+                  {["Week", "Month", "Today"].map((timeView) => (
+                    <Button
+                      key={timeView}
+                      onClick={() => setActiveTimeView(timeView)}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                        activeTimeView === timeView
+                          ? "bg-[#f6f6f6] text-[#232323] border border-[#e4e4e7]"
+                          : "bg-transparent text-[#999999] hover:bg-[#f6f6f6]"
+                      }`}
+                    >
+                      {timeView}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Calendar Grid */}
+              <div className="grid grid-cols-7 gap-1">
+                {/* Day Headers */}
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                  <div key={day} className="p-3 text-center text-sm font-medium text-[#999999] bg-[#f6f6f6]">
+                    {day}
+                  </div>
                 ))}
+
+                {/* Calendar Days */}
+                {getDaysInMonth().map((day, index) => {
+                  const event = day ? getEventForDate(day) : null
+                  const today = new Date().getDate()
+                  const isToday = day === today
+                  
+                  return (
+                    <div key={`day-${index}`} className="min-h-[100px] p-2 border border-[#e4e4e7] bg-white hover:bg-[#f9f9f9] transition-colors">
+                      {day ? (
+                        <>
+                          <div className={`text-sm font-medium mb-2 ${isToday ? 'text-[#ff622a] font-bold' : 'text-[#232323]'}`}>
+                            {day}
+                          </div>
+                          {event && (
+                            <div className={`rounded-md p-2 text-xs ${
+                              event.type === 'urgent' 
+                                ? 'bg-red-50 border border-red-200' 
+                                : 'bg-[#fff5f0] border border-[#ffcab0]'
+                            }`}>
+                              <div className="font-medium text-[#232323] truncate">
+                                {event.title}
+                              </div>
+                              <div className="text-[#666666] text-xs">
+                                {event.tasks}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-sm text-[#cccccc]"></div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
+          )}
 
-            {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-1">
-              {/* Day Headers */}
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                <div key={day} className="p-3 text-center text-sm font-medium text-[#999999] bg-[#f6f6f6]">
-                  {day}
-                </div>
-              ))}
-
-              {/* Calendar Days */}
-              {getDaysInMonth().map((day, index) => {
-                const event = day ? getEventForDate(day) : null
-                return (
-                  <div key={index} className="min-h-[100px] p-2 border border-[#e4e4e7] bg-white">
-                    {day && (
-                      <>
-                        <div className="text-sm font-medium text-[#232323] mb-2">{day}</div>
-                        {event && (
-                          <div className={`${event.color} rounded-md p-2 text-xs`}>
-                            <div className="font-medium text-[#232323]">{event.title}</div>
-                            <div className="text-[#232323] opacity-80">{event.tasks}</div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {!day && index === 0 && <div className="text-sm text-[#999999]">31</div>}
-                  </div>
-                )
-              })}
+          {/* Timeline View */}
+          {activeView === "Timeline" && (
+            <div className="bg-white rounded-lg p-6 border border-[#e4e4e7]">
+              <h3 className="text-lg font-semibold text-[#232323] mb-4">Timeline View</h3>
+              <p className="text-[#999999]">Timeline view coming soon...</p>
             </div>
-          </div>
+          )}
+
+          {/* List View */}
+          {activeView === "List" && (
+            <div className="bg-white rounded-lg p-6 border border-[#e4e4e7]">
+              <h3 className="text-lg font-semibold text-[#232323] mb-4">List View</h3>
+              {isJobsLoading ? (
+                <p className="text-[#999999]">Loading jobs...</p>
+              ) : jobs.length > 0 ? (
+                <div className="space-y-3">
+                  {jobs.map((job, index) => (
+                    <div key={job.id || index} className="p-4 border border-[#e4e4e7] rounded-lg">
+                      <h4 className="font-medium text-[#232323]">{job.jobType || 'Job'}</h4>
+                      <p className="text-sm text-[#666666]">{job.address || 'No address'}</p>
+                      <p className="text-xs text-[#999999]">{job.status || 'No status'}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[#999999]">No jobs available</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
