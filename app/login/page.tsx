@@ -46,7 +46,7 @@ export default function LoginPage() {
         } 
         localStorage.setItem('userData', JSON.stringify(data));
         queryClient.setQueryData(['/api/auth/me'], data);
-        router.push('/');
+        router.push('/dashboard');
       } else {
         setError(data.message || 'Login failed');
       }

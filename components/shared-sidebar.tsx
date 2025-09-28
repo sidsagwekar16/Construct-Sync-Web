@@ -45,19 +45,19 @@ const SharedSidebar = ({ onMinimizeChange }: SharedSidebarProps) => {
   }, [])
 
   const navigationItems = [
-    { icon: Home, label: "Dashboard", href: "/" },
+    { icon: Home, label: "Dashboard", href: "/dashboard" },
     { icon: Briefcase, label: "Jobs", href: "/jobs" },
     { icon: Calendar, label: "Timeline", href: "/timeline" },
     { icon: Map, label: "Maps", href: "/maps" },
     { icon: Clock, label: "Timesheet", href: "/timesheet" },
-    { icon: DollarSign, label: "Budget", href: "/budget" },
+   // { icon: DollarSign, label: "Budget", href: "/budget" },
     { icon: FileText, label: "Variations", href: "/variations" },
     { icon: Users, label: "Workers", href: "/workers" },
     { icon: Users, label: "Teams", href: "/teams" },
     { icon: Users, label: "Subcontractors", href: "/subcontractors" },
-    { icon: Shield, label: "Safety", href: "/safety" },
-    { icon: FileText, label: "Reports", href: "/reports" },
-    { icon: BarChart3, label: "Analytics", href: "/analytics" },
+  //  { icon: Shield, label: "Safety", href: "/safety" },
+   // { icon: FileText, label: "Reports", href: "/reports" },
+   // { icon: BarChart3, label: "Analytics", href: "/analytics" },
   ]
 
   const toggleMinimize = () => {
