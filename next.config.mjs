@@ -11,7 +11,7 @@ const nextConfig = {
   },
   async rewrites() {
     // Load environment variables with fallback
-    const apiUrl = process.env.API_URL || 'http://localhost:5001';
+    const apiUrl = process.env.API_URL || 'https://stellar-app-production.up.railway.app';
     
     console.log('API_URL in rewrites:', apiUrl); // Debug log
     
