@@ -106,8 +106,13 @@ export default function JobsPage() {
 
           {/* Job Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+<<<<<<< HEAD
             {currentTabJobs.map((job) => (
               <Card key={job.jobType} className="bg-white border border-gray-200 rounded-lg shadow-sm">
+=======
+            {jobs.map((job) => (
+              <Card key={job.id} className="bg-white border border-gray-200 rounded-lg shadow-sm">
+>>>>>>> 7086a67d9a50d88f370848532167f2847537bea5
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
