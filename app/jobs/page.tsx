@@ -98,8 +98,8 @@ export default function JobsPage() {
 
           {/* Job Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {statusTabs..map((job) => (
-              <Card key={job} className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            {jobs.map((job) => (
+              <Card key={job.id} className="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">

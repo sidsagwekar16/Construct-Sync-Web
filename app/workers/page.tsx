@@ -4,36 +4,34 @@ import { useState } from "react"
 import { SharedSidebar } from "@/components/shared-sidebar"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, Phone, Mail, Users, DollarSign } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { Worker } from "@/shared/schema"
 
 export default function WorkersPage() {
   const [isMinimized, setIsMinimized] = useState(false)
 
-  const workers = [
-    {
-      id: 1,
-      name: "Flutterflow",
-      role: "EMPLOYEE",
-      status: "Available",
-      avatar: "F",
-      phone: "1231231231",
-      email: "flutterflow@gmail.com",
-      team: "Alpha Team",
-      hourlyRate: "$0.00/hr",
-      skills: ["CONSTRUCTION", "MANAGEMENT"],
-    },
-    {
-      id: 2,
-      name: "Jeff",
-      role: "EMPLOYEE",
-      status: "Available",
-      avatar: "J",
-      phone: "1231231231",
-      email: "jeffersonpan@hotmail.com",
-      team: "Alpha Team",
-      hourlyRate: "$0.00/hr",
-      skills: ["CARPENTRY"],
-    },
-  ]
+  const fetchWithError = async (url: string) => {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
+    }
+    return response.json()
+  }
+
+  const { data: workers = [], isLoading, isError, refetch } = useQuery<Worker[]>({
+    queryKey: ['/api/workers'],
+    queryFn: () => fetchWithError('/api/workers'),
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const getAvatarChar = (w: Worker) => {
+    const base = (w.avatar && w.avatar.length > 0) ? w.avatar : (w.name || "?")
+    return base.substring(0, 1).toUpperCase()
+  }
+
+  const formatCurrency = (rate?: number | null) => `$${Number(rate ?? 0).toFixed(2)}/hr`
+
+  const capitalize = (s?: string | null) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -51,6 +49,19 @@ export default function WorkersPage() {
               + New Worker
             </Button>
           </div>
+
+          {isLoading && (
+            <div className="text-gray-600">Loading workers...</div>
+          )}
+
+          {isError && (
+            <div className="flex items-center justify-between bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-3 mb-6">
+              <span>Failed to load workers. Please try again.</span>
+              <Button variant="outline" size="sm" className="bg-transparent" onClick={() => refetch()}>
+                Retry
+              </Button>
+            </div>
+          )}
 
           {/* Filters */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -106,15 +117,15 @@ export default function WorkersPage() {
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-[#ff622a] rounded-full flex items-center justify-center text-white font-semibold text-lg">
-                      {worker.avatar}
+                      {getAvatarChar(worker)}
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 text-lg">{worker.name}</h3>
-                      <p className="text-sm text-gray-500 font-medium">{worker.role}</p>
+                      <p className="text-sm text-gray-500 font-medium">{(worker.type || worker.role || '').toUpperCase()}</p>
                     </div>
                   </div>
                   <span className="bg-[#ff622a] text-white px-3 py-1 rounded-full text-sm font-medium">
-                    {worker.status}
+                    {capitalize(worker.status || 'available')}
                   </span>
                 </div>
 
@@ -130,11 +141,11 @@ export default function WorkersPage() {
                   </div>
                   <div className="flex items-center gap-3 text-gray-600">
                     <Users className="w-4 h-4" />
-                    <span className="text-sm">{worker.team}</span>
+                    <span className="text-sm">{worker.teamId ? `Team ${worker.teamId}` : 'Unassigned'}</span>
                   </div>
                   <div className="flex items-center gap-3 text-gray-600">
                     <DollarSign className="w-4 h-4" />
-                    <span className="text-sm">{worker.hourlyRate}</span>
+                    <span className="text-sm">{formatCurrency(worker.hourlyRate)}</span>
                   </div>
                 </div>
 
@@ -142,7 +153,7 @@ export default function WorkersPage() {
                 <div className="mb-6">
                   <p className="text-sm font-medium text-gray-900 mb-2">Skills:</p>
                   <div className="flex flex-wrap gap-2">
-                    {worker.skills.map((skill, index) => (
+                    {(worker.skills || []).map((skill: string, index: number) => (
                       <span
                         key={index}
                         className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium"
