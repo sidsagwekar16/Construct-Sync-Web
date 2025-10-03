@@ -8,9 +8,9 @@ import "./globals.css"
 import ReactQueryProvider from "./ReactQueryProvider"
 
 export const metadata: Metadata = {
-  title: "v0 App",
-  description: "Created with v0",
-  generator: "v0.app",
+  title: "Construct Sync App",
+  description: "Created by Bluorigin",
+ 
 }
 
 export default function RootLayout({
