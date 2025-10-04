@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { SharedSidebar } from "@/components/shared-sidebar"
 import { SharedHeader } from "@/components/shared-header"
 import {
@@ -27,6 +27,10 @@ import { Progress } from "@/components/ui/progress"
 export default function AnalyticsPage() {
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false)
   const [activeTab, setActiveTab] = useState("site-overview")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [overview, setOverview] = useState<any>(null)
+  const [labor, setLabor] = useState<any>(null)
 
   const tabs = [
     { id: "site-overview", label: "Site Overview", icon: Building2 },
@@ -37,6 +41,30 @@ export default function AnalyticsPage() {
     { id: "future-planning", label: "Future Planning", icon: TrendingUp },
     { id: "action-plan", label: "Action Plan", icon: Target },
   ]
+
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const [ov, lb] = await Promise.all([
+          fetch('/api/analytics/overview', { credentials: 'include' }).then(r => r.json()),
+          fetch('/api/analytics/labor', { credentials: 'include' }).then(r => r.json()),
+        ])
+        if (!mounted) return
+        setOverview(ov)
+        setLabor(lb)
+      } catch (e: any) {
+        if (!mounted) return
+        setError(e?.message || 'Failed to load analytics')
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -54,7 +82,7 @@ export default function AnalyticsPage() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Construction Intelligence Hub</h1>
                 <p className="text-sm text-gray-600 mt-1">
-                  Real-time business insights from your project data • 0h tracked across 2 active sites
+                  Real-time business insights • {Number(labor?.hoursTotal || overview?.laborHours || 0).toFixed(1)}h tracked across {overview?.projects ?? 0} active site{(overview?.projects ?? 0) === 1 ? '' : 's'}
                 </p>
               </div>
             </div>
@@ -81,10 +109,10 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Tab Content */}
-          {activeTab === "site-overview" && <SiteOverviewTab />}
-          {activeTab === "job-profitability" && <JobProfitabilityTab />}
-          {activeTab === "labor-efficiency" && <LaborEfficiencyTab />}
-          {activeTab === "business-health" && <BusinessHealthTab />}
+          {activeTab === "site-overview" && <SiteOverviewTab overview={overview} loading={loading} error={error} />}
+          {activeTab === "job-profitability" && <JobProfitabilityTab overview={overview} loading={loading} error={error} />}
+          {activeTab === "labor-efficiency" && <LaborEfficiencyTab overview={overview} labor={labor} loading={loading} error={error} />}
+          {activeTab === "business-health" && <BusinessHealthTab overview={overview} loading={loading} error={error} />}
           {activeTab === "project-analytics" && <ProjectAnalyticsTab />}
           {activeTab === "future-planning" && <FuturePlanningTab />}
           {activeTab === "action-plan" && <ActionPlanTab />}
@@ -95,7 +123,7 @@ export default function AnalyticsPage() {
 }
 
 // Site Overview Tab
-function SiteOverviewTab() {
+function SiteOverviewTab({ overview, loading, error }: { overview: any; loading: boolean; error: string | null }) {
   return (
     <div className="space-y-6">
       {/* Dark Dashboard Section */}
@@ -107,29 +135,29 @@ function SiteOverviewTab() {
           <div>
             <h2 className="text-xl font-bold text-white">Construction Business Dashboard</h2>
             <p className="text-sm text-gray-300 mt-1">
-              Real-time insights from your construction projects • AI-powered analysis of all job sites
+              {loading ? 'Loading...' : error ? 'Failed to load analytics' : 'Real-time insights from your construction projects • AI-powered analysis of all job sites'}
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-4 gap-4">
           <div className="bg-[#34495e] rounded-lg p-4">
-            <div className="text-3xl font-bold text-yellow-400 mb-1">0.0%</div>
+            <div className="text-3xl font-bold text-yellow-400 mb-1">{(overview?.profitMargin ?? 0).toFixed(1)}%</div>
             <div className="text-sm text-gray-300">Profit Margin</div>
             <div className="text-xs text-gray-400 mt-1">Target: 10-15%</div>
           </div>
           <div className="bg-[#34495e] rounded-lg p-4">
-            <div className="text-3xl font-bold text-green-400 mb-1">$0</div>
+            <div className="text-3xl font-bold text-green-400 mb-1">${Number(overview?.netProfit ?? 0).toLocaleString()}</div>
             <div className="text-sm text-gray-300">Net Profit</div>
             <div className="text-xs text-gray-400 mt-1">All Projects</div>
           </div>
           <div className="bg-[#34495e] rounded-lg p-4">
-            <div className="text-3xl font-bold text-blue-400 mb-1">0.0h</div>
+            <div className="text-3xl font-bold text-blue-400 mb-1">{Number(overview?.laborHours ?? 0).toFixed(1)}h</div>
             <div className="text-sm text-gray-300">Labor Hours</div>
             <div className="text-xs text-gray-400 mt-1">All Sites</div>
           </div>
           <div className="bg-[#34495e] rounded-lg p-4">
-            <div className="text-3xl font-bold text-orange-400 mb-1">1</div>
+            <div className="text-3xl font-bold text-orange-400 mb-1">{overview?.variations ?? 0}</div>
             <div className="text-sm text-gray-300">Variations</div>
             <div className="text-xs text-gray-400 mt-1">Change Orders</div>
           </div>
@@ -147,17 +175,17 @@ function SiteOverviewTab() {
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Revenue</span>
-              <span className="font-semibold text-green-600">$1,355</span>
+              <span className="font-semibold text-green-600">${Number((overview?.revenueTotal ?? 0)).toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Expenses</span>
-              <span className="font-semibold text-red-600">$1,355</span>
+              <span className="font-semibold text-red-600">${Number((overview?.expensesTotal ?? 0)).toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-sm pt-2 border-t">
               <span className="text-gray-900 font-semibold">Net Profit</span>
-              <span className="font-bold">$0</span>
+              <span className="font-bold">${Number((overview?.netProfit ?? 0)).toLocaleString()}</span>
             </div>
-            <Progress value={0} className="h-2" />
+            <Progress value={Math.max(0, Math.min(100, (overview?.profitMargin ?? 0)))} className="h-2" />
             <div className="flex items-center gap-2 text-xs text-red-600">
               <AlertTriangle className="w-3 h-3" />
               <span>Needs Improvement</span>
@@ -186,7 +214,7 @@ function SiteOverviewTab() {
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-bold text-purple-600">85%</span>
+                <span className="text-2xl font-bold text-purple-600">{Math.max(0, Math.min(100, Number(overview?.businessHealthScore ?? 0))).toFixed(0)}%</span>
               </div>
             </div>
             <div className="text-sm font-semibold text-gray-900 mb-3">Business Health Score</div>
@@ -416,7 +444,7 @@ function SiteOverviewTab() {
 }
 
 // Job Profitability Tab
-function JobProfitabilityTab() {
+function JobProfitabilityTab({ overview, loading, error }: { overview: any; loading: boolean; error: string | null }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-3 gap-6">
@@ -425,10 +453,10 @@ function JobProfitabilityTab() {
             <DollarSign className="w-5 h-5 text-gray-600" />
             <span className="text-sm font-medium text-gray-600">Current Profit Margin</span>
           </div>
-          <div className="text-4xl font-bold text-gray-900 mb-2">0.0%</div>
+          <div className="text-4xl font-bold text-gray-900 mb-2">{(overview?.profitMargin ?? 0).toFixed(1)}%</div>
           <div className="text-sm text-gray-600 mb-4">Professional Target: 15%</div>
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div className="bg-red-500 h-2 rounded-full" style={{ width: "0%" }}></div>
+            <div className="bg-red-500 h-2 rounded-full" style={{ width: `${Math.max(0, Math.min(100, overview?.profitMargin ?? 0))}%` }}></div>
           </div>
         </div>
 
@@ -437,10 +465,10 @@ function JobProfitabilityTab() {
             <BarChart3 className="w-5 h-5 text-gray-600" />
             <span className="text-sm font-medium text-gray-600">Total Investment</span>
           </div>
-          <div className="text-4xl font-bold text-gray-900 mb-2">$1,355</div>
-          <div className="text-sm text-gray-600 mb-4">Across 2 active projects</div>
+          <div className="text-4xl font-bold text-gray-900 mb-2">${Number(overview?.expensesTotal ?? 0).toLocaleString()}</div>
+          <div className="text-sm text-gray-600 mb-4">Across {overview?.projects ?? 0} active project{(overview?.projects ?? 0) === 1 ? '' : 's'}</div>
           <div className="inline-block bg-gray-100 text-gray-700 text-xs font-medium px-2 py-1 rounded">
-            1 Variations
+            {overview?.variations ?? 0} Variations
           </div>
         </div>
 
@@ -449,7 +477,7 @@ function JobProfitabilityTab() {
             <Clock className="w-5 h-5 text-gray-600" />
             <span className="text-sm font-medium text-gray-600">Total Hours Logged</span>
           </div>
-          <div className="text-4xl font-bold text-gray-900 mb-2">0h</div>
+          <div className="text-4xl font-bold text-gray-900 mb-2">{Number(overview?.laborHours ?? 0).toFixed(1)}h</div>
           <div className="text-sm text-gray-600 mb-4">Real timesheet data</div>
           <div className="inline-block bg-black text-white text-xs font-medium px-2 py-1 rounded">Active Tracking</div>
         </div>
@@ -467,7 +495,7 @@ function JobProfitabilityTab() {
 }
 
 // Labor Efficiency Tab
-function LaborEfficiencyTab() {
+function LaborEfficiencyTab({ overview, labor, loading, error }: { overview: any; labor: any; loading: boolean; error: string | null }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-4 gap-6">
@@ -476,8 +504,8 @@ function LaborEfficiencyTab() {
             <Activity className="w-5 h-5 text-blue-600" />
             <span className="text-sm font-medium text-blue-900">Hour Utilization</span>
           </div>
-          <div className="text-4xl font-bold text-blue-900 mb-2">0%</div>
-          <div className="text-sm text-blue-700 mb-1">Based on 0.0h logged</div>
+          <div className="text-4xl font-bold text-blue-900 mb-2">{overview?.laborHours ? '100%' : '0%'}</div>
+          <div className="text-sm text-blue-700 mb-1">Based on {Number(overview?.laborHours ?? 0).toFixed(1)}h logged</div>
           <div className="text-xs text-blue-600">Target: 80-90%</div>
         </div>
 
@@ -486,7 +514,7 @@ function LaborEfficiencyTab() {
             <DollarSign className="w-5 h-5 text-green-600" />
             <span className="text-sm font-medium text-green-900">Cost Efficiency</span>
           </div>
-          <div className="text-4xl font-bold text-green-900 mb-2">$0</div>
+          <div className="text-4xl font-bold text-green-900 mb-2">${Number(labor?.costPerHour ?? 0).toFixed(2)}</div>
           <div className="text-sm text-green-700 mb-2">Cost per hour</div>
           <div className="inline-block bg-green-600 text-white text-xs font-medium px-2 py-1 rounded">Efficient</div>
         </div>
@@ -496,7 +524,7 @@ function LaborEfficiencyTab() {
             <TrendingUp className="w-5 h-5 text-purple-600" />
             <span className="text-sm font-medium text-purple-900">Revenue Efficiency</span>
           </div>
-          <div className="text-4xl font-bold text-purple-900 mb-2">$0</div>
+          <div className="text-4xl font-bold text-purple-900 mb-2">${Number((overview?.revenueTotal ?? 0) / (overview?.laborHours || 1)).toFixed(2)}</div>
           <div className="text-sm text-purple-700 mb-1">Revenue per hour</div>
           <div className="text-xs text-purple-600">Target: $400-500/hr</div>
         </div>
@@ -506,7 +534,7 @@ function LaborEfficiencyTab() {
             <Zap className="w-5 h-5 text-orange-600" />
             <span className="text-sm font-medium text-orange-900">Productivity Score</span>
           </div>
-          <div className="text-4xl font-bold text-orange-900 mb-2">0</div>
+          <div className="text-4xl font-bold text-orange-900 mb-2">{Math.max(0, Math.min(100, Number(overview?.businessHealthScore ?? 0))).toFixed(0)}</div>
           <div className="text-sm text-orange-700 mb-2">Efficiency rating</div>
           <div className="inline-block bg-orange-600 text-white text-xs font-medium px-2 py-1 rounded">Improve</div>
         </div>
@@ -611,7 +639,7 @@ function LaborEfficiencyTab() {
 }
 
 // Business Health Tab
-function BusinessHealthTab() {
+function BusinessHealthTab({ overview, loading, error }: { overview: any; loading: boolean; error: string | null }) {
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200 p-8">
@@ -633,11 +661,11 @@ function BusinessHealthTab() {
                   stroke="#8b5cf6"
                   strokeWidth="12"
                   fill="none"
-                  strokeDasharray={`${(43 / 100) * 351.68} 351.68`}
+                  strokeDasharray={`${(Math.max(0, Math.min(100, Number(overview?.businessHealthScore ?? 0))) / 100) * 351.68} 351.68`}
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold text-purple-600">43</span>
+                <span className="text-3xl font-bold text-purple-600">{Math.max(0, Math.min(100, Number(overview?.businessHealthScore ?? 0))).toFixed(0)}</span>
                 <span className="text-xs text-gray-600">Health Score</span>
               </div>
             </div>
@@ -681,7 +709,7 @@ function BusinessHealthTab() {
             </div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900 mb-1">0.0%</div>
+            <div className="text-2xl font-bold text-gray-900 mb-1">{(overview?.profitMargin ?? 0).toFixed(1)}%</div>
             <div className="text-sm text-gray-600 mb-1">Current Margin</div>
             <div className="text-xs text-gray-500">Target: 10-15%</div>
           </div>
@@ -712,9 +740,9 @@ function BusinessHealthTab() {
             </div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900 mb-1">0h</div>
+            <div className="text-2xl font-bold text-gray-900 mb-1">{Number(overview?.laborHours ?? 0).toFixed(1)}h</div>
             <div className="text-sm text-gray-600 mb-1">Hours Logged</div>
-            <div className="text-xs text-gray-500">Across 2 projects</div>
+            <div className="text-xs text-gray-500">Across {overview?.projects ?? 0} projects</div>
           </div>
         </div>
 
@@ -729,7 +757,7 @@ function BusinessHealthTab() {
             </div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900 mb-1">$1K</div>
+            <div className="text-2xl font-bold text-gray-900 mb-1">${Number(overview?.revenueTotal ?? 0).toLocaleString()}</div>
             <div className="text-sm text-gray-600 mb-1">Revenue</div>
             <div className="text-xs text-gray-500">Target: $30K+/month</div>
           </div>

@@ -21,47 +21,96 @@ import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import Image from "next/image"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { apiRequest } from "@/lib/api"
 
-export default function AddJobPage() {
-  const router = useRouter()
-  const [jobType, setJobType] = useState("")
-  const [address, setAddress] = useState("")
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
-  const [clientName, setClientName] = useState("")
-  const [clientPhone, setClientPhone] = useState("")
-  const [clientEmail, setClientEmail] = useState("")
+export default function SiteInformationPage() {
+  const [siteName, setSiteName] = useState("")
+  const [latitude, setLatitude] = useState("")
+  const [longitude, setLongitude] = useState("")
   const [notes, setNotes] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [savedNotice, setSavedNotice] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
-  // Restore saved general info if available
+  // Restore saved site info
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("addJobGeneral")
+      const raw = localStorage.getItem("addJobSite")
       if (raw) {
-        const g = JSON.parse(raw)
-        setJobType(g.jobType || "")
-        setAddress(g.address || "")
-        setClientName(g.clientName || "")
-        setClientPhone(g.clientPhone || "")
-        setClientEmail(g.clientEmail || "")
-        setNotes(g.notes || "")
-        setStartDate(g.startDate || "")
-        setEndDate(g.endDate || "")
+        const s = JSON.parse(raw)
+        setSiteName(s.siteName || "")
+        setLatitude(s.latitude || "")
+        setLongitude(s.longitude || "")
+        setNotes(s.notes || "")
       }
     } catch {}
   }, [])
 
-  const saveGeneral = () => {
+  const saveSite = () => {
+    const payload = { siteName, latitude, longitude, notes }
+    localStorage.setItem("addJobSite", JSON.stringify(payload))
+  }
+
+  const collectPayload = () => {
+    const gen = (() => {
+      try { return JSON.parse(localStorage.getItem("addJobGeneral") || "{}") } catch { return {} }
+    })()
+    const team = (() => {
+      try { return JSON.parse(localStorage.getItem("addJobTeam") || "{}") } catch { return {} }
+    })()
+    const site = { siteName, latitude, longitude, notes }
+
+    const payload: any = {
+      jobType: gen.jobType,
+      address: gen.address,
+      clientName: gen.clientName,
+      clientPhone: gen.clientPhone || undefined,
+      clientEmail: gen.clientEmail || undefined,
+      description: gen.notes || undefined,
+      startTime: gen.startDate ? new Date(gen.startDate).toISOString() : undefined,
+      endTime: gen.endDate ? new Date(gen.endDate).toISOString() : undefined,
+      status: "scheduled",
+      teamId: team.teamId != null ? String(team.teamId) : undefined,
+      workerIds: Array.isArray(team.workerIds) ? team.workerIds : undefined,
+      projectManagerIds: team.managerId ? [team.managerId] : undefined,
+      assignedTo: team.managerId ?? (Array.isArray(team.workerIds) && team.workerIds.length > 0 ? team.workerIds[0] : undefined),
+      notes: site.notes || undefined,
+      latitude: site.latitude ? Number(site.latitude) : undefined,
+      longitude: site.longitude ? Number(site.longitude) : undefined,
+    }
+    return payload
+  }
+
+  const finish = async () => {
+    if (submitting) return
     try {
-      const payload = { jobType, address, clientName, clientPhone, clientEmail, notes, startDate, endDate }
-      localStorage.setItem("addJobGeneral", JSON.stringify(payload))
-      setSavedNotice("Saved")
-      window.setTimeout(() => setSavedNotice(null), 2000)
+      setSubmitting(true)
+      setError(null)
+      saveSite()
+      const payload = collectPayload()
+      const created = await apiRequest("/api/jobs", "POST", payload)
+      // Some backends ignore assignment fields on create. Patch them after create.
+      try {
+        const createdId = created?.id ?? created?.job?.id
+        const { teamId, workerIds, projectManagerIds, assignedTo } = payload as any
+        const hasAssignment = Boolean(teamId) || (Array.isArray(workerIds) && workerIds.length > 0) || (Array.isArray(projectManagerIds) && projectManagerIds.length > 0) || Boolean(assignedTo)
+        if (createdId && hasAssignment) {
+          await apiRequest(`/api/jobs/${createdId}`, "PATCH", {
+            teamId,
+            workerIds,
+            projectManagerIds,
+            assignedTo,
+          })
+        }
+      } catch {}
+      // cleanup
+      localStorage.removeItem("addJobGeneral")
+      localStorage.removeItem("addJobTeam")
+      localStorage.removeItem("addJobSite")
+      window.location.href = "/jobs"
     } catch (e: any) {
-      setError(e?.message || "Failed to save")
+      setError(e?.message || "Failed to create job")
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -194,125 +243,46 @@ export default function AddJobPage() {
           <div className="max-w-4xl mx-auto">
             {/* Back Button and Title */}
             <div className="flex items-center gap-4 mb-8">
-              <Link href="/jobs">
+              <Link href="/jobs/add/team">
                 <ArrowLeft className="w-6 h-6 text-[#000000] cursor-pointer hover:text-[#ff622a]" />
               </Link>
-              <h2 className="text-xl font-semibold text-[#000000]">New Job Details</h2>
+              <h2 className="text-xl font-semibold text-[#000000]">Site Information</h2>
             </div>
 
             {/* Progress Steps */}
             <div className="flex items-center gap-4 mb-8">
-              <div className="flex items-center gap-2 px-6 py-3 bg-[#fff0ea] text-[#ff622a] rounded-full text-sm font-medium cursor-pointer">
+              <Link href="/jobs/add" className="flex items-center gap-2 px-6 py-3 bg-[#eff0f6] text-[#999999] rounded-full text-sm font-medium hover:bg-[#e0e1e7] transition-colors cursor-pointer">
                 General Information
+              </Link>
+              <Link href="/jobs/add/team" className="flex items-center gap-2 px-6 py-3 bg-[#eff0f6] text-[#999999] rounded-full text-sm font-medium hover:bg-[#e0e1e7] transition-colors cursor-pointer">
+                Team Assignment
+              </Link>
+              <div className="flex items-center gap-2 px-6 py-3 bg-[#fff0ea] text-[#ff622a] rounded-full text-sm font-medium">
+                Site Information
               </div>
-              <Link href="/jobs/add/team">
-                <div className="flex items-center gap-2 px-6 py-3 bg-[#eff0f6] text-[#999999] rounded-full text-sm font-medium cursor-pointer hover:bg-[#e4e4e7] transition-colors">
-                  Team Assignment
-                </div>
-              </Link>
-              <Link href="/jobs/add/site">
-                <div className="flex items-center gap-2 px-6 py-3 bg-[#eff0f6] text-[#999999] rounded-full text-sm font-medium cursor-pointer hover:bg-[#e4e4e7] transition-colors">
-                  Site Information
-                </div>
-              </Link>
             </div>
 
             {/* Form */}
             <div className="bg-white rounded-lg p-8">
               <div className="space-y-6">
-                {error ? (
-                  <div className="text-red-600 text-sm">{error}</div>
-                ) : null}
-                {savedNotice ? (
-                  <div className="text-green-600 text-sm">{savedNotice}</div>
-                ) : null}
-                {/* Job Type */}
+                {error ? <div className="text-red-600 text-sm">{error}</div> : null}
                 <div>
-                  <label className="block text-[#000000] font-medium mb-2">Job Type</label>
-                  <Input
-                    placeholder="e.g. Drywall installation, Plastering, Painting"
-                    className="bg-white border-[#d9d9d9] focus:border-[#ff622a]"
-                    value={jobType}
-                    onChange={(e) => setJobType(e.target.value)}
-                  />
+                  <label className="block text-[#000000] font-medium mb-2">Site Name</label>
+                  <Input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="e.g. Lot 24 - East Block" className="bg-white border-[#d9d9d9] focus:border-[#ff622a]" />
                 </div>
-
-                {/* Job Address */}
-                <div>
-                  <label className="block text-[#000000] font-medium mb-2">Job Address</label>
-                  <Input
-                    placeholder="Enter job address"
-                    className="bg-white border-[#d9d9d9] focus:border-[#ff622a]"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                  />
-                  <p className="text-[#999999] text-sm mt-1">Start typing to see suggested address from google maps</p>
-                </div>
-
-                {/* Date Range */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-[#000000] font-medium mb-2">Started at</label>
-                    <Input
-                      type="date"
-                      className="bg-white border-[#d9d9d9] focus:border-[#ff622a]"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                    />
+                    <label className="block text-[#000000] font-medium mb-2">Latitude</label>
+                    <Input value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="e.g. -36.8485" className="bg-white border-[#d9d9d9] focus:border-[#ff622a]" />
                   </div>
                   <div>
-                    <label className="block text-[#000000] font-medium mb-2">Ending at</label>
-                    <Input
-                      type="date"
-                      className="bg-white border-[#d9d9d9] focus:border-[#ff622a]"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                    />
+                    <label className="block text-[#000000] font-medium mb-2">Longitude</label>
+                    <Input value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="e.g. 174.7633" className="bg-white border-[#d9d9d9] focus:border-[#ff622a]" />
                   </div>
                 </div>
-
-                {/* Client Name */}
                 <div>
-                  <label className="block text-[#000000] font-medium mb-2">Client Name</label>
-                  <Input
-                    placeholder="Enter Client Name"
-                    className="bg-white border-[#d9d9d9] focus:border-[#ff622a]"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                  />
-                </div>
-
-                {/* Client Contact */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-[#000000] font-medium mb-2">Client Phone</label>
-                    <Input
-                      type="tel"
-                      className="bg-white border-[#d9d9d9] focus:border-[#ff622a]"
-                      value={clientPhone}
-                      onChange={(e) => setClientPhone(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[#000000] font-medium mb-2">Client Mail</label>
-                    <Input
-                      type="email"
-                      className="bg-white border-[#d9d9d9] focus:border-[#ff622a]"
-                      value={clientEmail}
-                      onChange={(e) => setClientEmail(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Other Notes */}
-                <div>
-                  <label className="block text-[#000000] font-medium mb-2">Other Notes</label>
-                  <Textarea
-                    rows={6}
-                    className="bg-white border-[#d9d9d9] focus:border-[#ff622a] resize-none"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
+                  <label className="block text-[#000000] font-medium mb-2">Notes</label>
+                  <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={6} className="bg-white border-[#d9d9d9] focus:border-[#ff622a] resize-none" />
                 </div>
               </div>
 
@@ -324,15 +294,8 @@ export default function AddJobPage() {
                   </Button>
                 </Link>
                 <div className="flex items-center gap-3">
-                  <Button
-                    className="bg-[#192d47] hover:bg-[#2a4a6b] text-white"
-                    onClick={saveGeneral}
-                  >
-                    Save
-                  </Button>
-                  <Link href="/jobs/add/team">
-                    <Button className="bg-[#ff622a] hover:bg-[#fd7d4f] text-white" onClick={saveGeneral}>Next</Button>
-                  </Link>
+                  <Button className="bg-[#192d47] hover:bg-[#2a4a6b] text-white" onClick={saveSite}>Save</Button>
+                  <Button className="bg-[#ff622a] hover:bg-[#fd7d4f] text-white" onClick={finish} disabled={submitting}>{submitting ? "Creating…" : "Finish"}</Button>
                 </div>
               </div>
             </div>
@@ -342,3 +305,5 @@ export default function AddJobPage() {
     </div>
   )
 }
+
+

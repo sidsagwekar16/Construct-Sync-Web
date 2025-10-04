@@ -13,6 +13,7 @@ import { Progress } from "@/components/ui/progress"
 import { Search, Plus, Eye, Edit, DollarSign, FileText, Users, TrendingUp, X } from "lucide-react"
 import SharedSidebar from "@/components/shared-sidebar"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { apiRequest } from "@/lib/api"
 
 export default function SubcontractorsPage() {
   const [sidebarMinimized, setSidebarMinimized] = useState(() => {
@@ -31,6 +32,28 @@ export default function SubcontractorsPage() {
   const [activeTab, setActiveTab] = useState("overview")
   const [selectedContract, setSelectedContract] = useState<any | null>(null)
   const queryClient = useQueryClient()
+  // Local form state: Add Subcontractor
+  const [scCompanyName, setScCompanyName] = useState("")
+  const [scSpecialty, setScSpecialty] = useState("")
+  const [scEmail, setScEmail] = useState("")
+  const [scPhone, setScPhone] = useState("")
+  const [scAddress, setScAddress] = useState("")
+  const [scLicense, setScLicense] = useState("")
+  const [scInsuranceExpiry, setScInsuranceExpiry] = useState("")
+  const [scError, setScError] = useState<string | null>(null)
+  
+  // Local form state: New Contract
+  const [ncTitle, setNcTitle] = useState("")
+  const [ncJobId, setNcJobId] = useState<string>("")
+  const [ncType, setNcType] = useState("fixed")
+  const [ncSubcontractorId, setNcSubcontractorId] = useState<string>("")
+  const [ncCategory, setNcCategory] = useState("electrical")
+  const [ncDescription, setNcDescription] = useState("")
+  const [ncBaseAmount, setNcBaseAmount] = useState<string>("")
+  const [ncVariations, setNcVariations] = useState<string>("")
+  const [ncStartDate, setNcStartDate] = useState<string>("")
+  const [ncEndDate, setNcEndDate] = useState<string>("")
+  const [ncError, setNcError] = useState<string | null>(null)
 
   const fetcher = async (url: string) => {
     const res = await fetch(url)
@@ -42,6 +65,19 @@ export default function SubcontractorsPage() {
     queryKey: ['/api/subcontractor-contracts'],
     queryFn: () => fetcher('/api/subcontractor-contracts')
   })
+
+  // Needed lists
+  const { data: jobs = [] } = useQuery({
+    queryKey: ['/api/jobs'],
+    queryFn: () => fetcher('/api/jobs'),
+    staleTime: 1000 * 60 * 5,
+  })
+  const { data: workers = [] } = useQuery({
+    queryKey: ['/api/workers'],
+    queryFn: () => fetcher('/api/workers'),
+    staleTime: 1000 * 60 * 5,
+  })
+  const subcontractors = (workers as any[]).filter((w) => String(w.type || '').toLowerCase().includes('subcontractor'))
 
   const filteredContracts = useMemo(() => {
     return (contracts as any[]).filter((c) => {
@@ -61,6 +97,77 @@ export default function SubcontractorsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/subcontractor-contracts'] })
       setShowEditContract(false)
+    }
+  })
+
+  const createSubcontractor = useMutation({
+    mutationFn: async () => {
+      // Prefer dedicated subcontractors endpoint if available
+      const subcontractorPayload: any = {
+        companyName: scCompanyName,
+        specialty: scSpecialty || undefined,
+        email: scEmail || undefined,
+        phone: scPhone || undefined,
+        address: scAddress || undefined,
+        licenseNumber: scLicense || undefined,
+        insuranceExpiry: scInsuranceExpiry || undefined,
+      }
+      // Fallback worker payload in case backend models subcontractors as workers
+      const generatedUsername = scEmail || `${scCompanyName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`
+      const workerPayload: any = {
+        username: generatedUsername,
+        password: 'ChangeMe123!',
+        name: scCompanyName,
+        email: scEmail || undefined,
+        phone: scPhone || undefined,
+        address: scAddress || undefined,
+        role: 'worker',
+        type: 'subcontractor',
+        skills: scSpecialty ? [scSpecialty] : undefined,
+      }
+      try {
+        return await apiRequest('/api/subcontractors', 'POST', subcontractorPayload)
+      } catch {
+        try {
+          return await apiRequest('/api/admin/workers', 'POST', workerPayload)
+        } catch {
+          return await apiRequest('/api/workers', 'POST', workerPayload)
+        }
+      }
+    },
+    onMutate: () => setScError(null),
+    onError: (e: any) => setScError(e?.message || 'Failed to add subcontractor'),
+    onSuccess: () => {
+      setShowAddSubcontractor(false)
+      setScCompanyName(""); setScSpecialty(""); setScEmail(""); setScPhone(""); setScAddress(""); setScLicense(""); setScInsuranceExpiry("")
+      queryClient.invalidateQueries({ queryKey: ['/api/workers'] })
+    }
+  })
+
+  const createContract = useMutation({
+    mutationFn: async () => {
+      const body: any = {
+        contractTitle: ncTitle,
+        jobId: ncJobId ? Number(ncJobId) : undefined,
+        subcontractorId: ncSubcontractorId ? Number(ncSubcontractorId) : undefined,
+        category: ncCategory,
+        contractType: ncType,
+        description: ncDescription || undefined,
+        baseAmount: ncBaseAmount ? Number(ncBaseAmount) : 0,
+        totalVariations: ncVariations ? Number(ncVariations) : 0,
+        expectedStartDate: ncStartDate || undefined,
+        expectedEndDate: ncEndDate || undefined,
+        status: 'pending',
+        createdBy: 1,
+      }
+      return await apiRequest('/api/subcontractor-contracts', 'POST', body)
+    },
+    onMutate: () => setNcError(null),
+    onError: (e: any) => setNcError(e?.message || 'Failed to create contract'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/subcontractor-contracts'] })
+      setShowNewContract(false)
+      setNcTitle(""); setNcJobId(""); setNcType('fixed'); setNcSubcontractorId(""); setNcCategory('electrical'); setNcDescription(""); setNcBaseAmount(""); setNcVariations(""); setNcStartDate(""); setNcEndDate("")
     }
   })
 
@@ -97,14 +204,15 @@ export default function SubcontractorsPage() {
                     <DialogTitle>Add New Subcontractor</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
+                    {scError ? <div className="text-red-600 text-sm">{scError}</div> : null}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="companyName">Company Name</Label>
-                        <Input id="companyName" placeholder="ABC Construction Ltd" />
+                        <Input id="companyName" placeholder="ABC Construction Ltd" value={scCompanyName} onChange={(e) => setScCompanyName(e.target.value)} />
                       </div>
                       <div>
                         <Label htmlFor="specialty">Specialty</Label>
-                        <Select>
+                        <Select value={scSpecialty} onValueChange={setScSpecialty}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select specialty" />
                           </SelectTrigger>
@@ -120,32 +228,32 @@ export default function SubcontractorsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" type="email" placeholder="contact@company.com" />
+                        <Input id="email" type="email" placeholder="contact@company.com" value={scEmail} onChange={(e) => setScEmail(e.target.value)} />
                       </div>
                       <div>
                         <Label htmlFor="phone">Phone</Label>
-                        <Input id="phone" placeholder="021-555-0123" />
+                        <Input id="phone" placeholder="021-555-0123" value={scPhone} onChange={(e) => setScPhone(e.target.value)} />
                       </div>
                     </div>
                     <div>
                       <Label htmlFor="address">Address</Label>
-                      <Input id="address" placeholder="123 Main Street, Auckland" />
+                      <Input id="address" placeholder="123 Main Street, Auckland" value={scAddress} onChange={(e) => setScAddress(e.target.value)} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="license">License Number</Label>
-                        <Input id="license" placeholder="LIC123456" />
+                        <Input id="license" placeholder="LIC123456" value={scLicense} onChange={(e) => setScLicense(e.target.value)} />
                       </div>
                       <div>
                         <Label htmlFor="insurance">Insurance Expiry</Label>
-                        <Input id="insurance" type="date" />
+                        <Input id="insurance" type="date" value={scInsuranceExpiry} onChange={(e) => setScInsuranceExpiry(e.target.value)} />
                       </div>
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
                       <Button variant="outline" onClick={() => setShowAddSubcontractor(false)}>
                         Cancel
                       </Button>
-                      <Button className="bg-[#ff622a] hover:bg-[#fd7d4f]">Add Subcontractor</Button>
+                      <Button className="bg-[#ff622a] hover:bg-[#fd7d4f]" disabled={createSubcontractor.isPending || !scCompanyName} onClick={() => createSubcontractor.mutate()}>{createSubcontractor.isPending ? 'Adding…' : 'Add Subcontractor'}</Button>
                     </div>
                   </div>
                 </DialogContent>
@@ -163,26 +271,28 @@ export default function SubcontractorsPage() {
                     <DialogTitle>Create New Contract</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
+                    {ncError ? <div className="text-red-600 text-sm">{ncError}</div> : null}
                     <div>
                       <Label htmlFor="contractTitle">Contract Title</Label>
-                      <Input id="contractTitle" placeholder="e.g. Electrical Installation Contract" />
+                      <Input id="contractTitle" placeholder="e.g. Electrical Installation Contract" value={ncTitle} onChange={(e) => setNcTitle(e.target.value)} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="job">Job</Label>
-                        <Select>
+                        <Select value={ncJobId} onValueChange={setNcJobId}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select job" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="test123">test123</SelectItem>
-                            <SelectItem value="project456">project456</SelectItem>
+                            {(jobs as any[]).map((j) => (
+                              <SelectItem key={j.id} value={String(j.id)}>{j.address || `Job ${j.id}`}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
                         <Label htmlFor="contractType">Contract Type</Label>
-                        <Select>
+                        <Select value={ncType} onValueChange={setNcType}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
@@ -196,19 +306,20 @@ export default function SubcontractorsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="subcontractor">Subcontractor</Label>
-                        <Select>
+                        <Select value={ncSubcontractorId} onValueChange={setNcSubcontractorId}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select subcontractor" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="abc">ABC Electrical Services</SelectItem>
-                            <SelectItem value="premier">Premier Plumbing Co</SelectItem>
+                            {subcontractors.map((w: any) => (
+                              <SelectItem key={w.id} value={String(w.id)}>{w.name || w.username || `#${w.id}`}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
                         <Label htmlFor="category">Category</Label>
-                        <Select>
+                        <Select value={ncCategory} onValueChange={setNcCategory}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
@@ -222,37 +333,33 @@ export default function SubcontractorsPage() {
                     </div>
                     <div>
                       <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        placeholder="Detailed description of work to be performed..."
-                        rows={3}
-                      />
+                      <Textarea id="description" placeholder="Detailed description of work to be performed..." rows={3} value={ncDescription} onChange={(e) => setNcDescription(e.target.value)} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="baseAmount">Base Amount ($)</Label>
-                        <Input id="baseAmount" type="number" placeholder="0.00" />
+                        <Input id="baseAmount" type="number" placeholder="0.00" value={ncBaseAmount} onChange={(e) => setNcBaseAmount(e.target.value)} />
                       </div>
                       <div>
                         <Label htmlFor="variations">Variations ($)</Label>
-                        <Input id="variations" type="number" placeholder="0.00" />
+                        <Input id="variations" type="number" placeholder="0.00" value={ncVariations} onChange={(e) => setNcVariations(e.target.value)} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="startDate">Expected Start Date</Label>
-                        <Input id="startDate" type="date" />
+                        <Input id="startDate" type="date" value={ncStartDate} onChange={(e) => setNcStartDate(e.target.value)} />
                       </div>
                       <div>
                         <Label htmlFor="endDate">Expected End Date</Label>
-                        <Input id="endDate" type="date" />
+                        <Input id="endDate" type="date" value={ncEndDate} onChange={(e) => setNcEndDate(e.target.value)} />
                       </div>
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
                       <Button variant="outline" onClick={() => setShowNewContract(false)}>
                         Cancel
                       </Button>
-                      <Button className="bg-[#ff622a] hover:bg-[#fd7d4f]">Create Contract</Button>
+                      <Button className="bg-[#ff622a] hover:bg-[#fd7d4f]" disabled={createContract.isPending || !ncTitle || !ncJobId || !ncSubcontractorId} onClick={() => createContract.mutate()}>{createContract.isPending ? 'Creating…' : 'Create Contract'}</Button>
                     </div>
                   </div>
                 </DialogContent>

@@ -1,3 +1,5 @@
+"use client"
+
 import {
   ArrowLeft,
   Bell,
@@ -15,10 +17,69 @@ import {
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
 import Image from "next/image"
+import { useEffect, useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import type { Team, Worker } from "@/shared/schema"
 
 export default function TeamAssignmentPage() {
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<number[]>([])
+  const [selectedManagerId, setSelectedManagerId] = useState<number | null>(null)
+  const [savedNotice, setSavedNotice] = useState<string | null>(null)
+
+  const fetchWithError = async (url: string) => {
+    const response = await fetch(url, { credentials: "include" })
+    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
+    return response.json()
+  }
+
+  const { data: teams = [] } = useQuery<Team[]>({
+    queryKey: ["/api/teams"],
+    queryFn: () => fetchWithError("/api/teams"),
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const { data: workers = [] } = useQuery<Worker[]>({
+    queryKey: ["/api/workers"],
+    queryFn: () => fetchWithError("/api/workers"),
+    staleTime: 1000 * 60 * 5,
+  })
+
+  // Restore any saved selections for this step
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("addJobTeam")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed.teamId !== undefined) setSelectedTeamId(parsed.teamId)
+        if (Array.isArray(parsed.workerIds)) setSelectedWorkerIds(parsed.workerIds)
+        if (parsed.managerId !== undefined) setSelectedManagerId(parsed.managerId)
+      }
+    } catch {}
+  }, [])
+
+  const workerRole = (w: Worker) => (w.role || "worker").toLowerCase()
+  const workerList = useMemo(() => (workers as Worker[]).filter((w) => workerRole(w) === "worker"), [workers])
+  const managerList = useMemo(() => (workers as Worker[]).filter((w) => ["manager", "admin"].includes(workerRole(w))), [workers])
+
+  const toggleWorker = (id: number) => {
+    setSelectedWorkerIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  const clearSavedNoticeLater = () => {
+    window.setTimeout(() => setSavedNotice(null), 2000)
+  }
+
+  const handleSaveLocal = () => {
+    const payload = { teamId: selectedTeamId, workerIds: selectedWorkerIds, managerId: selectedManagerId }
+    localStorage.setItem("addJobTeam", JSON.stringify(payload))
+    setSavedNotice("Selections saved")
+    clearSavedNoticeLater()
+  }
+
   return (
     <div className="flex min-h-screen bg-[#eff0f6]">
       {/* Sidebar */}
@@ -165,63 +226,76 @@ export default function TeamAssignmentPage() {
               <div className="flex items-center gap-2 px-6 py-3 bg-[#fff0ea] text-[#ff622a] rounded-full text-sm font-medium">
                 Team Assignment
               </div>
-              <div className="flex items-center gap-2 px-6 py-3 bg-[#eff0f6] text-[#999999] rounded-full text-sm font-medium">
-                Site Information
-              </div>
+              <Link href="/jobs/add/site">
+                <div className="flex items-center gap-2 px-6 py-3 bg-[#eff0f6] text-[#999999] rounded-full text-sm font-medium hover:bg-[#e4e4e7] transition-colors">
+                  Site Information
+                </div>
+              </Link>
             </div>
 
             <div className="space-y-6">
               {/* Select Team Card */}
               <div className="bg-white rounded-lg p-6 border border-[#e4e4e7]">
                 <label className="block text-[#000000] font-medium mb-4">Select Team (Optional)</label>
-                <div className="bg-[#f8f9fa] border border-[#e4e4e7] rounded-lg p-4 text-center text-[#999999]">
-                  No teams available
-                </div>
+                {Array.isArray(teams) && teams.length > 0 ? (
+                  <div className="space-y-3">
+                    {(teams as Team[]).map((t) => (
+                      <label key={t.id} className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={selectedTeamId === t.id}
+                          onCheckedChange={() => setSelectedTeamId(selectedTeamId === t.id ? null : t.id)}
+                          className={selectedTeamId === t.id ? "border-[#ff622a] data-[state=checked]:bg-[#ff622a]" : ""}
+                        />
+                        <span className="text-[#000000] font-medium">{t.name || `Team ${t.id}`}</span>
+                        <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">{(t.workerIds?.length ?? 0)} members</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-[#f8f9fa] border border-[#e4e4e7] rounded-lg p-4 text-center text-[#999999]">No teams available</div>
+                )}
               </div>
 
               {/* Select Individual Workers Card */}
               <div className="bg-white rounded-lg p-6 border border-[#e4e4e7]">
                 <label className="block text-[#000000] font-medium mb-4">Select Individual Workers</label>
                 <div className="space-y-3 mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 bg-[#ff622a] rounded border-2 border-[#ff622a] flex items-center justify-center">
-                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
+                  {workerList.length === 0 ? (
+                    <div className="text-[#999999]">No workers found</div>
+                  ) : (
+                    workerList.map((w) => (
+                      <label key={w.id} className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={selectedWorkerIds.includes(w.id)}
+                          onCheckedChange={() => toggleWorker(w.id)}
+                          className={selectedWorkerIds.includes(w.id) ? "border-[#ff622a] data-[state=checked]:bg-[#ff622a]" : ""}
                         />
-                      </svg>
-                    </div>
-                    <span className="text-[#000000] font-medium">Name</span>
-                    <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">WORKER</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 bg-white rounded border-2 border-[#d9d9d9]"></div>
-                    <span className="text-[#000000] font-medium">Jeff</span>
-                    <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">WORKER</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 bg-white rounded border-2 border-[#d9d9d9]"></div>
-                    <span className="text-[#000000] font-medium">Sidd</span>
-                    <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">WORKER</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 bg-white rounded border-2 border-[#d9d9d9]"></div>
-                    <span className="text-[#000000] font-medium">Flutterflow</span>
-                    <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">WORKER</span>
-                  </div>
+                        <span className="text-[#000000] font-medium">{w.name || `#${w.id}`}</span>
+                        <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">WORKER</span>
+                      </label>
+                    ))
+                  )}
                 </div>
 
                 {/* Selected Workers Section */}
                 <div className="bg-[#fff0ea] rounded-lg p-4">
                   <div className="text-sm text-[#999999] mb-3">Selected Workers</div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 bg-[#192d47] text-white px-3 py-2 rounded-full text-sm">
-                      <span>Name</span>
-                      <span className="text-xs text-[#999999]">WORKER</span>
-                      <X className="w-4 h-4 cursor-pointer hover:text-[#ff622a]" />
-                    </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedWorkerIds.length === 0 ? (
+                      <span className="text-[#666666]">None</span>
+                    ) : (
+                      selectedWorkerIds.map((id) => {
+                        const w = (workers as Worker[]).find((x) => x.id === id)
+                        const name = w?.name || `#${id}`
+                        return (
+                          <div key={id} className="flex items-center gap-2 bg-[#192d47] text-white px-3 py-2 rounded-full text-sm">
+                            <span>{name}</span>
+                            <span className="text-xs text-[#999999]">WORKER</span>
+                            <X className="w-4 h-4 cursor-pointer hover:text-[#ff622a]" onClick={() => toggleWorker(id)} />
+                          </div>
+                        )
+                      })
+                    )}
                   </div>
                 </div>
               </div>
@@ -232,32 +306,21 @@ export default function TeamAssignmentPage() {
                   Management Assistant <span className="text-[#999999] font-normal">(Project Manager)</span>
                 </label>
                 <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 bg-white rounded border-2 border-[#d9d9d9]"></div>
-                    <span className="text-[#000000] font-medium">Name</span>
-                    <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">
-                      PRODUCT MANAGER
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 bg-white rounded border-2 border-[#d9d9d9]"></div>
-                    <span className="text-[#000000] font-medium">Jeff</span>
-                    <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">
-                      PRODUCT MANAGER
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 bg-white rounded border-2 border-[#d9d9d9]"></div>
-                    <span className="text-[#000000] font-medium">Sidd</span>
-                    <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">
-                      PRODUCT MANAGER
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 bg-white rounded border-2 border-[#d9d9d9]"></div>
-                    <span className="text-[#000000] font-medium">Flutterflow</span>
-                    <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">WORKER</span>
-                  </div>
+                  {managerList.length === 0 ? (
+                    <div className="text-[#999999]">No managers found</div>
+                  ) : (
+                    managerList.map((m) => (
+                      <label key={m.id} className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={selectedManagerId === m.id}
+                          onCheckedChange={() => setSelectedManagerId(selectedManagerId === m.id ? null : m.id)}
+                          className={selectedManagerId === m.id ? "border-[#ff622a] data-[state=checked]:bg-[#ff622a]" : ""}
+                        />
+                        <span className="text-[#000000] font-medium">{m.name || `#${m.id}`}</span>
+                        <span className="text-xs bg-[#fff0ea] text-[#ff622a] px-2 py-1 rounded font-medium">PROJECT MANAGER</span>
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -269,8 +332,11 @@ export default function TeamAssignmentPage() {
                   </Button>
                 </Link>
                 <div className="flex items-center gap-3">
-                  <Button className="bg-[#192d47] hover:bg-[#2a4a6b] text-white">Save</Button>
-                  <Button className="bg-[#ff622a] hover:bg-[#fd7d4f] text-white">Next</Button>
+                  {savedNotice ? <span className="text-sm text-[#24a148] mr-2">{savedNotice}</span> : null}
+                  <Button className="bg-[#192d47] hover:bg-[#2a4a6b] text-white" onClick={handleSaveLocal}>Save</Button>
+                  <Link href="/jobs/add/site">
+                    <Button className="bg-[#ff622a] hover:bg-[#fd7d4f] text-white">Next</Button>
+                  </Link>
                 </div>
               </div>
             </div>
